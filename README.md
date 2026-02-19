@@ -21,7 +21,7 @@ GitX is a beloved macOS Git GUI that's no longer actively maintained and has com
 
 ## Screenshots
 
-_Coming soon_
+![GitX-Tauri Screenshot](screenshot.png)
 
 ## Installation
 

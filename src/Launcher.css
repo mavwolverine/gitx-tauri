@@ -1,0 +1,251 @@
+.launcher {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  background: #2a2a2a;
+  color: white;
+  font-family:
+    -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  overflow: hidden;
+}
+
+.launcher-header {
+  text-align: center;
+  padding: 40px 20px 20px;
+  flex-shrink: 0;
+}
+
+.launcher-header h1 {
+  margin: 0 0 8px 0;
+  font-size: 32px;
+  font-weight: 300;
+  letter-spacing: -1px;
+}
+
+.launcher-header p {
+  margin: 0;
+  opacity: 0.8;
+  font-size: 16px;
+}
+
+.launcher-content {
+  flex: 1;
+  display: flex;
+  max-width: 800px;
+  margin: 0 auto;
+  padding: 0 20px 20px 20px;
+  gap: 40px;
+  overflow: auto;
+  box-sizing: border-box;
+}
+
+.launcher-section {
+  flex: 1;
+}
+
+.launcher-section h2 {
+  margin: 0 0 16px 0;
+  font-size: 18px;
+  font-weight: 500;
+  opacity: 0.9;
+}
+
+.recent-repos {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  overflow-y: auto;
+  /* max-height: 120px; */
+}
+
+.recent-repo-item {
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 8px;
+  padding: 12px 16px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  position: relative;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+}
+
+.recent-repo-item:hover {
+  background: rgba(255, 255, 255, 0.2);
+  border-color: rgba(255, 255, 255, 0.3);
+  transform: translateY(-1px);
+}
+
+.repo-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.delete-repo-btn {
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  color: white;
+  border-radius: 4px;
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  font-size: 14px;
+  opacity: 0.6;
+  transition: all 0.2s ease;
+  flex-shrink: 0;
+}
+
+.delete-repo-btn:hover {
+  background: rgba(255, 0, 0, 0.3);
+  border-color: rgba(255, 0, 0, 0.5);
+  opacity: 1;
+}
+
+.repo-name {
+  font-weight: 500;
+  font-size: 14px;
+  margin-bottom: 4px;
+}
+
+.repo-path {
+  font-size: 12px;
+  opacity: 0.7;
+  font-family: monospace;
+  margin-bottom: 4px;
+  word-break: break-all;
+}
+
+/*
+.recent-repo-item .repo-path {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  direction: rtl;
+  text-align: left;
+}
+*/
+
+.repo-date {
+  font-size: 11px;
+  opacity: 0.6;
+}
+
+.no-recent {
+  text-align: center;
+  padding: 40px 20px;
+  opacity: 0.6;
+  font-style: italic;
+}
+
+.launcher-actions {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.action-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 12px 24px;
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  background: rgba(255, 255, 255, 0.1);
+  color: white;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.action-button:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.2);
+  border-color: rgba(255, 255, 255, 0.4);
+  transform: translateY(-1px);
+}
+
+.action-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.action-button.primary {
+  background: rgba(255, 255, 255, 0.2);
+  border-color: rgba(255, 255, 255, 0.4);
+}
+
+.button-icon {
+  font-size: 16px;
+}
+
+.clone-section {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 12px;
+  padding: 20px;
+}
+
+.clone-section h3 {
+  margin: 0 0 16px 0;
+  font-size: 16px;
+  font-weight: 500;
+  opacity: 0.9;
+}
+
+.clone-form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.clone-input {
+  padding: 10px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  background: rgba(255, 255, 255, 0.1);
+  color: white;
+  border-radius: 6px;
+  font-size: 13px;
+  font-family: inherit;
+}
+
+.clone-input::placeholder {
+  color: rgba(255, 255, 255, 0.5);
+}
+
+.clone-input:focus {
+  outline: none;
+  border-color: rgba(255, 255, 255, 0.4);
+  background: rgba(255, 255, 255, 0.15);
+}
+
+.clone-path-row {
+  display: flex;
+  gap: 8px;
+}
+
+.clone-path-row .clone-input {
+  flex: 1;
+}
+
+.path-button {
+  padding: 10px 16px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  background: rgba(255, 255, 255, 0.1);
+  color: white;
+  border-radius: 6px;
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.path-button:hover {
+  background: rgba(255, 255, 255, 0.2);
+  border-color: rgba(255, 255, 255, 0.3);
+}

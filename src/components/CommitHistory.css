@@ -1,0 +1,162 @@
+.commit-history {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  background: #1e1e1e;
+}
+
+.branch-filter-bar {
+  display: flex;
+  gap: 4px;
+  padding: 8px 12px;
+  background: #252526;
+  border-bottom: 1px solid #333;
+}
+
+.filter-btn {
+  background: transparent;
+  border: 1px solid #3e3e42;
+  color: #d4d4d4;
+  padding: 4px 12px;
+  font-size: 12px;
+  cursor: pointer;
+  border-radius: 3px;
+}
+
+.filter-btn:hover {
+  background: #2a2d2e;
+}
+
+.filter-btn.active {
+  background: #094771;
+  border-color: #007acc;
+}
+
+.commit-table-container {
+  flex: 1;
+  overflow: auto;
+}
+
+.commit-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.commit-table thead {
+  position: sticky;
+  top: 0;
+  background: #252526;
+  z-index: 10;
+}
+
+.commit-table th {
+  text-align: left;
+  padding: 4px 12px;
+  border-bottom: 1px solid #333;
+  font-weight: 600;
+  color: #ccc;
+  position: relative;
+  user-select: none;
+}
+
+.column-resizer {
+  position: absolute;
+  right: 0;
+  top: 0;
+  bottom: 0;
+  width: 4px;
+  cursor: col-resize;
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.column-resizer:hover {
+  background: #007acc;
+}
+
+.commit-table tbody tr {
+  cursor: pointer;
+}
+
+.commit-table tbody tr:nth-child(even) {
+  background: #252526;
+}
+
+.commit-table tbody tr:hover {
+  background: #2a2d2e;
+}
+
+.commit-table tbody tr.selected {
+  background: #094771;
+}
+
+.commit-table td {
+  padding: 3px 12px;
+  color: #d4d4d4;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 0;
+}
+
+.commit-table td.sha {
+  font-family: "Courier New", monospace;
+  color: #4ec9b0;
+}
+
+.commit-table td.graph {
+  padding: 0;
+  vertical-align: top;
+}
+
+.commit-table td.graph svg {
+  display: block;
+  width: 100%;
+}
+
+.commit-table td.message {
+  color: #d4d4d4;
+}
+
+.commit-table td.author {
+  color: #9cdcfe;
+}
+
+.commit-table td.date {
+  color: #b5cea8;
+  font-family:
+    "SF Mono", Monaco, "Cascadia Code", "Roboto Mono", Consolas, "Courier New",
+    monospace;
+}
+
+.local-branch-tag,
+.remote-branch-tag,
+.tag-badge {
+  display: inline-block;
+  padding: 2px 6px;
+  margin-right: 6px;
+  border-radius: 3px;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.local-branch-tag {
+  background: #4a9eff;
+  color: #fff;
+}
+
+.remote-branch-tag {
+  background: #4a9eff;
+  color: #fff;
+}
+
+.tag-badge {
+  background: #f4c430;
+  color: #000;
+}
+
+.loading {
+  text-align: center;
+  padding: 20px;
+  color: #888;
+}

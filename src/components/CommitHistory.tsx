@@ -8,14 +8,25 @@ interface CommitHistoryProps {
   currentBranch?: string;
 }
 
+interface GitAuthor {
+  name: string;
+  email: string;
+  timestamp: string;
+}
+
+interface GitBranch {
+  name: string;
+  is_head: boolean;
+  is_remote: boolean;
+}
+
 interface GitCommit {
   id: string;
   message: string;
-  author: string;
-  email: string;
-  timestamp: string;
+  author: GitAuthor;
+  committer: GitAuthor;
   parents: string[];
-  branches?: string[];
+  branches?: GitBranch[];
   tags?: string[];
   lane: number;
   lines: GraphLine[];
@@ -290,13 +301,14 @@ export function CommitHistory({
                     <td className="message">
                       {commit.branches &&
                         commit.branches.map((branch) => {
-                          const isRemote = branch.includes("/");
-                          const className = isRemote
-                            ? "remote-branch-tag"
-                            : "local-branch-tag";
+                          const className = branch.is_head
+                            ? "branch-badge-local-head"
+                            : branch.is_remote
+                              ? "branch-badge-remote"
+                              : "branch-badge-local";
                           return (
-                            <span key={branch} className={className}>
-                              {branch}
+                            <span key={branch.name} className={className}>
+                              {branch.name}
                             </span>
                           );
                         })}
@@ -308,8 +320,10 @@ export function CommitHistory({
                         ))}
                       {commit.message.split("\n")[0]}
                     </td>
-                    <td className="author">{commit.author}</td>
-                    <td className="date">{formatDate(commit.timestamp)}</td>
+                    <td className="author">{commit.author.name}</td>
+                    <td className="date">
+                      {formatDate(commit.author.timestamp)}
+                    </td>
                   </tr>
                 );
               })

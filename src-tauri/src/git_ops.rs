@@ -2,10 +2,11 @@ use git2::{Cred, FetchOptions, RemoteCallbacks, Repository};
 use serde::Serialize;
 use std::path::Path;
 
-#[derive(Serialize)]
+#[derive(Clone, Serialize)]
 pub struct GitBranch {
     pub name: String,
     pub is_head: bool,
+    pub is_remote: bool,
 }
 
 #[derive(Serialize)]
@@ -28,15 +29,21 @@ pub struct GitFileStatus {
     pub staged: bool,
 }
 
+#[derive(Debug, Serialize)]
+pub struct GitAuthor {
+    pub name: String,
+    pub email: String,
+    pub timestamp: String,
+}
+
 #[derive(Serialize)]
 pub struct GitCommit {
     pub id: String,
     pub message: String,
-    pub author: String,
-    pub email: String,
-    pub timestamp: String,
+    pub author: GitAuthor,
+    pub committer: GitAuthor,
     pub parents: Vec<String>,
-    pub branches: Option<Vec<String>>,
+    pub branches: Option<Vec<GitBranch>>,
     pub tags: Option<Vec<String>>,
     pub lane: usize,
     pub lines: Vec<GraphLine>,
@@ -123,6 +130,7 @@ pub fn get_branches(repo: &Repository) -> Result<Vec<GitBranch>, git2::Error> {
         branches.push(GitBranch {
             name: "HEAD (detached)".to_string(),
             is_head: true,
+            is_remote: false,
         });
     }
 
@@ -132,6 +140,7 @@ pub fn get_branches(repo: &Repository) -> Result<Vec<GitBranch>, git2::Error> {
             branches.push(GitBranch {
                 name: name.to_string(),
                 is_head: !is_detached && Some(name) == head_name,
+                is_remote: false,
             });
         }
     }
@@ -677,13 +686,13 @@ pub fn get_commits(
         }
     } else {
         // Push branches based on filter
-        let branch_type = if local_only {
+        let filter_branch_type = if local_only {
             Some(git2::BranchType::Local)
         } else {
             None // All branches
         };
 
-        for branch in repo.branches(branch_type)? {
+        for branch in repo.branches(filter_branch_type)? {
             let (branch, _) = branch?;
             if let Some(target) = branch.get().target() {
                 revwalk.push(target)?;
@@ -693,24 +702,43 @@ pub fn get_commits(
 
     revwalk.set_sorting(git2::Sort::TIME)?;
 
-    let mut branch_map: std::collections::HashMap<git2::Oid, Vec<String>> =
+    let mut branch_map: std::collections::HashMap<git2::Oid, Vec<GitBranch>> =
         std::collections::HashMap::new();
-    let mut tag_map: std::collections::HashMap<git2::Oid, Vec<String>> =
-        std::collections::HashMap::new();
+    let is_detached = repo.head_detached().unwrap_or(false);
+    let head_name = repo
+        .head()
+        .ok()
+        .and_then(|h| h.shorthand().map(|s| s.to_string()));
 
     for branch in repo.branches(None)? {
-        let (branch, _) = branch?;
+        let (branch, branch_type) = branch?;
         if let Some(name) = branch.name()? {
             if let Some(target) = branch.get().target() {
-                branch_map.entry(target).or_default().push(name.to_string());
+                branch_map.entry(target).or_default().push(GitBranch {
+                    name: name.to_string(),
+                    is_head: !is_detached && Some(name.to_string()) == head_name,
+                    is_remote: branch_type == git2::BranchType::Remote,
+                });
             }
         }
     }
 
+    let mut tag_map: std::collections::HashMap<git2::Oid, Vec<String>> =
+        std::collections::HashMap::new();
+
     repo.tag_foreach(|oid, name| {
         if let Ok(name_str) = std::str::from_utf8(name) {
             if let Some(tag_name) = name_str.strip_prefix("refs/tags/") {
-                tag_map.entry(oid).or_default().push(tag_name.to_string());
+                // Peel to the commit OID (handles both lightweight and annotated tags)
+                let target_oid = repo
+                    .find_object(oid, None)
+                    .and_then(|obj| obj.peel(git2::ObjectType::Commit))
+                    .map(|obj| obj.id())
+                    .unwrap_or(oid);
+                tag_map
+                    .entry(target_oid)
+                    .or_default()
+                    .push(tag_name.to_string());
             }
         }
         true
@@ -728,12 +756,26 @@ pub fn get_commits(
         let branches = branch_map.get(&oid).cloned();
         let tags = tag_map.get(&oid).cloned();
 
+        let commit_author = commit.author();
+        let commit_committer = commit.committer();
+
+        let author = GitAuthor {
+            name: commit_author.name().unwrap_or("").to_string(),
+            email: commit_author.email().unwrap_or("").to_string(),
+            timestamp: commit_author.when().seconds().to_string(),
+        };
+
+        let committer = GitAuthor {
+            name: commit_committer.name().unwrap_or("").to_string(),
+            email: commit_committer.email().unwrap_or("").to_string(),
+            timestamp: commit_committer.when().seconds().to_string(),
+        };
+
         commits.push(GitCommit {
             id: commit.id().to_string(),
             message: commit.message().unwrap_or("").to_string(),
-            author: commit.author().name().unwrap_or("").to_string(),
-            email: commit.author().email().unwrap_or("").to_string(),
-            timestamp: commit.time().seconds().to_string(),
+            author,
+            committer,
             parents,
             branches,
             tags,

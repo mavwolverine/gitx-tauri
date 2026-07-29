@@ -86,11 +86,7 @@ export function BranchTree({
     return tree;
   };
 
-  const renderTree = (
-    tree: BranchTree,
-    level: number,
-    prefix: string,
-  ) => {
+  const renderTree = (tree: BranchTree, level: number, prefix: string) => {
     const elements: React.ReactElement[] = [];
     const rootBranches = tree._branches as string[] | undefined;
     const folders = Object.keys(tree).filter((k) => k !== "_branches");

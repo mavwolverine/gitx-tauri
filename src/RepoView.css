@@ -180,7 +180,7 @@ body {
 
 .detail-row {
   display: flex;
-  margin-bottom: 8px;
+  margin-bottom: 4px;
   color: #d4d4d4;
 }
 
@@ -207,24 +207,33 @@ body {
   gap: 8px;
 }
 
-.branch-badge-local {
+.branch-badge-local,
+.branch-badge-local-head,
+.branch-badge-remote,
+.tag-badge {
   display: inline-block;
   padding: 2px 6px;
   border-radius: 3px;
   font-size: 10px;
   font-weight: 600;
-  background: #1e7e34;
   color: #fff;
 }
 
+.branch-badge-local {
+  background: #1e7e34;
+}
+
+.branch-badge-local-head {
+  background: #dc8e35;
+}
+
 .branch-badge-remote {
-  display: inline-block;
-  padding: 2px 6px;
-  border-radius: 3px;
-  font-size: 10px;
-  font-weight: 600;
   background: #4a9eff;
-  color: #fff;
+}
+
+.tag-badge {
+  background: #f4c430;
+  color: #000;
 }
 
 .diff-button {
@@ -262,8 +271,8 @@ body {
 }
 
 .avatar {
-  width: 40px;
-  height: 40px;
+  width: 36px;
+  height: 36px;
   border-radius: 50%;
   background: #0e639c;
   display: flex;

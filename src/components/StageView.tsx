@@ -39,7 +39,7 @@ export function StageView({ repoPath }: StageViewProps) {
     });
 
     return () => {
-      unlisten.then((fn) => fn());
+      unlisten.then((fn) => fn()).catch(() => {});
     };
   }, [repoPath]);
 

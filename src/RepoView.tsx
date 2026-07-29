@@ -303,7 +303,7 @@ function RepoView({ repoPath }: RepoViewProps) {
 
   const handleDiffScroll = (e: React.UIEvent<HTMLDivElement>) => {
     const target = e.target as HTMLDivElement;
-    console.log("Scroll position:", target.scrollTop);
+    // console.log("Scroll position:", target.scrollTop);
     setShowBackToTop(target.scrollTop > 300);
   };
 
@@ -538,17 +538,28 @@ function RepoView({ repoPath }: RepoViewProps) {
                           <span className="detail-value">
                             {selectedCommit.id}
                             {selectedCommit.branches &&
-                              selectedCommit.branches.length > 0 && (
+                              selectedCommit.branches.length > 0 &&
+                              selectedCommit.branches.map((branch, index) => (
                                 <span
+                                  key={index}
                                   className={
-                                    selectedCommit.branches[0].includes("/")
-                                      ? "branch-badge-remote"
-                                      : "branch-badge-local"
+                                    branch.is_head
+                                      ? "branch-badge-local-head"
+                                      : branch.is_remote
+                                        ? "branch-badge-remote"
+                                        : "branch-badge-local"
                                   }
                                 >
-                                  {selectedCommit.branches[0]}
+                                  {branch.name}
                                 </span>
-                              )}
+                              ))}
+                            {selectedCommit.tags &&
+                              selectedCommit.tags.length > 0 &&
+                              selectedCommit.tags.map((tag, index) => (
+                                <span key={index} className="tag-badge">
+                                  {tag}
+                                </span>
+                              ))}
                           </span>
                         </div>
                         <div className="detail-row">
@@ -566,24 +577,62 @@ function RepoView({ repoPath }: RepoViewProps) {
                           <span className="detail-label">Author</span>
                           <div className="author-info">
                             <div className="avatar">
-                              {selectedCommit.author.charAt(0).toUpperCase()}
+                              {selectedCommit.author.name
+                                .charAt(0)
+                                .toUpperCase()}
                             </div>
                             <div className="author-details">
                               <div className="author-name">
-                                {selectedCommit.author} &lt;
-                                {selectedCommit.email}
+                                {selectedCommit.author.name} &lt;
+                                {selectedCommit.author.email}
                                 &gt;
                               </div>
                               <div className="author-date">
-                                {formatDate(selectedCommit.timestamp)}
+                                {formatDate(selectedCommit.author.timestamp)}
                               </div>
-                              <div className="commit-date">
-                                {formatDate(selectedCommit.timestamp)} (Commit
-                                date)
-                              </div>
+                              {selectedCommit.committer.name ===
+                                selectedCommit.author.name &&
+                                selectedCommit.committer.email ===
+                                  selectedCommit.author.email &&
+                                selectedCommit.committer.timestamp !==
+                                  selectedCommit.author.timestamp && (
+                                  <div className="commit-date">
+                                    {formatDate(
+                                      selectedCommit.committer.timestamp
+                                    )}{" "}
+                                    (Commit date)
+                                  </div>
+                                )}
                             </div>
                           </div>
                         </div>
+                        {(selectedCommit.committer.name !==
+                          selectedCommit.author.name ||
+                          selectedCommit.committer.email !==
+                            selectedCommit.author.email) && (
+                          <div className="detail-row author-row">
+                            <span className="detail-label">Committer</span>
+                            <div className="author-info">
+                              <div className="avatar">
+                                {selectedCommit.committer.name
+                                  .charAt(0)
+                                  .toUpperCase()}
+                              </div>
+                              <div className="author-details">
+                                <div className="author-name">
+                                  {selectedCommit.committer.name} &lt;
+                                  {selectedCommit.committer.email}
+                                  &gt;
+                                </div>
+                                <div className="author-date">
+                                  {formatDate(
+                                    selectedCommit.committer.timestamp
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        )}
                       </div>
                       <div className="commit-message-section">
                         <div className="message-content">
@@ -619,8 +668,10 @@ function RepoView({ repoPath }: RepoViewProps) {
                             <div className="file-list">
                               {commitFiles.map((file, idx) => {
                                 const getFileIcon = () => {
-                                  if (file.status === "Added") return "🟢";
-                                  if (file.status === "Deleted") return "🔴";
+                                  if (file.status.toLowerCase() === "added")
+                                    return "🟢";
+                                  if (file.status.toLowerCase() === "deleted")
+                                    return "🔴";
                                   return "🟠";
                                 };
 

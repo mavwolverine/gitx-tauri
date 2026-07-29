@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { message } from "@tauri-apps/plugin-dialog";
-import { Panel, PanelGroup, PanelResizeHandle } from "react-resizable-panels";
+import { Panel, Group, Separator } from "react-resizable-panels";
 import { BranchTree } from "./components/BranchTree";
 import { StageView } from "./components/StageView";
 import { CommitHistory, GitCommit } from "./components/CommitHistory";
@@ -508,7 +508,7 @@ function RepoView({ repoPath }: RepoViewProps) {
           {currentView === "stage" ? (
             <StageView repoPath={repoPath} />
           ) : selectedBranch ? (
-            <PanelGroup direction="vertical">
+            <Group orientation="vertical">
               <Panel defaultSize={60} minSize={20}>
                 <div className="history-panel">
                   <CommitHistory
@@ -518,7 +518,7 @@ function RepoView({ repoPath }: RepoViewProps) {
                   />
                 </div>
               </Panel>
-              <PanelResizeHandle className="resize-handle-horizontal" />
+              <Separator className="resize-handle-horizontal" />
               <Panel defaultSize={40} minSize={20}>
                 <div
                   className="commit-details-panel"
@@ -803,7 +803,7 @@ function RepoView({ repoPath }: RepoViewProps) {
                   )}
                 </div>
               </Panel>
-            </PanelGroup>
+            </Group>
           ) : (
             <div className="content-placeholder">
               Select an item from the sidebar

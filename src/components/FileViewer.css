@@ -1,0 +1,146 @@
+.file-viewer {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow: hidden;
+  background: #1e1e1e;
+}
+
+.file-viewer-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 12px;
+  background: #252526;
+  border-bottom: 1px solid #333;
+}
+
+.file-viewer-path {
+  color: #d4d4d4;
+  font-size: 12px;
+  font-family: "Courier New", monospace;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.file-viewer-body {
+  flex: 1;
+  overflow: auto;
+}
+
+.file-viewer-status {
+  padding: 16px;
+  color: #888;
+  font-size: 12px;
+}
+
+.source-view,
+.blame-view {
+  font-family:
+    "SF Mono", Monaco, "Cascadia Code", "Roboto Mono", Consolas, "Courier New",
+    monospace;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.source-line,
+.blame-line {
+  display: flex;
+  min-height: 18px;
+  white-space: pre;
+  color: #d4d4d4;
+}
+
+.blame-line .line-number {
+  width: 40px;
+}
+
+.blame-group {
+  display: flex;
+  border-bottom: 1px solid #2a2d2e;
+}
+
+.blame-group:nth-child(even) {
+  background: #202020;
+}
+
+.blame-meta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 220px;
+  flex-shrink: 0;
+  padding: 4px 8px;
+  overflow: hidden;
+  border-right: 1px solid #3e3e42;
+}
+
+.blame-sha {
+  color: #4ec9b0;
+  flex-shrink: 0;
+}
+
+.blame-author {
+  color: #858585;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.blame-group-lines {
+  flex: 1;
+  min-width: 0;
+}
+
+.file-history-list {
+  display: flex;
+  flex-direction: column;
+}
+
+.file-history-item {
+  padding: 8px 12px;
+  border-bottom: 1px solid #2a2d2e;
+  cursor: pointer;
+}
+
+.file-history-item:hover {
+  background: #2a2d2e;
+}
+
+.file-history-message {
+  color: #d4d4d4;
+  font-size: 12px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  margin-bottom: 3px;
+}
+
+.file-history-meta {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 11px;
+  color: #888;
+}
+
+.file-history-meta .sha {
+  font-family: "Courier New", monospace;
+  color: #4ec9b0;
+}
+
+.file-history-meta .author {
+  color: #9cdcfe;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.file-history-meta .date {
+  color: #b5cea8;
+  font-family:
+    "SF Mono", Monaco, "Cascadia Code", "Roboto Mono", Consolas, "Courier New",
+    monospace;
+}

@@ -164,6 +164,16 @@ body {
   background: #007acc;
 }
 
+.resize-handle-vertical {
+  width: 4px;
+  background: #333;
+  cursor: col-resize;
+}
+
+.resize-handle-vertical:hover {
+  background: #007acc;
+}
+
 .commit-details-panel {
   height: 100%;
   overflow: auto;

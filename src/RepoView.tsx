@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { message } from "@tauri-apps/plugin-dialog";
@@ -6,6 +6,8 @@ import { Panel, Group, Separator } from "react-resizable-panels";
 import { BranchTree } from "./components/BranchTree";
 import { StageView } from "./components/StageView";
 import { CommitHistory, GitCommit } from "./components/CommitHistory";
+import { CommitTreeView, TreeNode } from "./components/CommitTreeView";
+import { FileViewer } from "./components/FileViewer";
 import "./RepoView.css";
 
 interface RepoViewProps {
@@ -45,6 +47,17 @@ interface DiffLine {
   content: string;
 }
 
+function findTreeNodeByPath(nodes: TreeNode[], path: string): TreeNode | null {
+  for (const node of nodes) {
+    if (node.path === path) return node;
+    if (node.children) {
+      const found = findTreeNodeByPath(node.children, path);
+      if (found) return found;
+    }
+  }
+  return null;
+}
+
 function RepoView({ repoPath }: RepoViewProps) {
   const [repoName, setRepoName] = useState("");
   const [branches, setBranches] = useState<GitBranch[]>([]);
@@ -57,6 +70,20 @@ function RepoView({ repoPath }: RepoViewProps) {
   const [collapsedFiles, setCollapsedFiles] = useState<Set<number>>(new Set());
   const [showBackToTop, setShowBackToTop] = useState(false);
   const [statusMessage, setStatusMessage] = useState<string>("");
+  const [commitViewMode, setCommitViewMode] = useState<"detail" | "tree">(
+    "detail"
+  );
+  const [commitTree, setCommitTree] = useState<TreeNode[]>([]);
+  const [treeLoading, setTreeLoading] = useState(false);
+  const [selectedTreeFile, setSelectedTreeFile] = useState<TreeNode | null>(
+    null
+  );
+  const [jumpTarget, setJumpTarget] = useState<{
+    id: string;
+    nonce: number;
+  } | null>(null);
+  const selectedCommitRef = useRef(selectedCommit);
+  selectedCommitRef.current = selectedCommit;
 
   const showStatus = (message: string, duration = 3000) => {
     setStatusMessage(message);
@@ -290,6 +317,28 @@ function RepoView({ repoPath }: RepoViewProps) {
     [repoPath]
   );
 
+  useEffect(() => {
+    const commit = selectedCommitRef.current;
+    if (commitViewMode !== "tree" || !commit) return;
+    setTreeLoading(true);
+    invoke<TreeNode[]>("get_commit_tree", {
+      path: repoPath,
+      commitId: commit.id,
+    })
+      .then((nodes) => {
+        setCommitTree(nodes);
+        setSelectedTreeFile((prev) =>
+          prev ? findTreeNodeByPath(nodes, prev.path) : null
+        );
+      })
+      .catch((error) => console.error("Failed to load commit tree:", error))
+      .finally(() => setTreeLoading(false));
+  }, [commitViewMode, selectedCommit?.id, repoPath]);
+
+  const handleJumpToCommit = useCallback((commitId: string) => {
+    setJumpTarget((prev) => ({ id: commitId, nonce: (prev?.nonce ?? 0) + 1 }));
+  }, []);
+
   const scrollToFile = (index: number) => {
     const element = document.getElementById(`file-diff-${index}`);
     if (element) {
@@ -518,293 +567,327 @@ function RepoView({ repoPath }: RepoViewProps) {
                     repoPath={repoPath}
                     onCommitSelect={handleCommitSelect}
                     currentBranch={selectedBranch}
+                    jumpTarget={jumpTarget}
+                    commitViewMode={commitViewMode}
+                    onCommitViewModeChange={setCommitViewMode}
                   />
                 </div>
               </Panel>
               <Separator className="resize-handle-horizontal" />
               <Panel defaultSize={40} minSize={20}>
-                <div
-                  className="commit-details-panel"
-                  onScroll={handleDiffScroll}
-                >
-                  {selectedCommit ? (
-                    <>
-                      <div className="details-header">
-                        <div className="detail-row">
-                          <span className="detail-label">Subject</span>
-                          <span className="detail-value">
-                            {selectedCommit.message.split("\n")[0]}
-                          </span>
+                {commitViewMode === "tree" && selectedCommit ? (
+                  <Group orientation="horizontal">
+                    <Panel defaultSize={30} minSize={15}>
+                      {treeLoading ? (
+                        <div className="file-viewer-status">
+                          Loading tree...
                         </div>
-                        <div className="detail-row">
-                          <span className="detail-label">ID</span>
-                          <span className="detail-value">
-                            {selectedCommit.id}
-                            {selectedCommit.branches &&
-                              selectedCommit.branches.length > 0 &&
-                              selectedCommit.branches.map((branch, index) => (
-                                <span
-                                  key={index}
-                                  className={
-                                    branch.is_head
-                                      ? "branch-badge-local-head"
-                                      : branch.is_remote
-                                        ? "branch-badge-remote"
-                                        : "branch-badge-local"
-                                  }
-                                >
-                                  {branch.name}
-                                </span>
-                              ))}
-                            {selectedCommit.tags &&
-                              selectedCommit.tags.length > 0 &&
-                              selectedCommit.tags.map((tag, index) => (
-                                <span key={index} className="tag-badge">
-                                  {tag}
-                                </span>
-                              ))}
-                          </span>
-                        </div>
-                        <div className="detail-row">
-                          <span className="detail-label">Parents</span>
-                          <span className="detail-value">
-                            {selectedCommit.parents.map((parent, i) => (
-                              <span key={parent}>
-                                <span className="parent-sha">{parent}</span>
-                                {i < selectedCommit.parents.length - 1 && ", "}
-                              </span>
-                            ))}
-                          </span>
-                        </div>
-                        <div className="detail-row author-row">
-                          <span className="detail-label">Author</span>
-                          <div className="author-info">
-                            <div className="avatar">
-                              {selectedCommit.author.name
-                                .charAt(0)
-                                .toUpperCase()}
-                            </div>
-                            <div className="author-details">
-                              <div className="author-name">
-                                {selectedCommit.author.name} &lt;
-                                {selectedCommit.author.email}
-                                &gt;
-                              </div>
-                              <div className="author-date">
-                                {formatDate(selectedCommit.author.timestamp)}
-                              </div>
-                              {selectedCommit.committer.name ===
-                                selectedCommit.author.name &&
-                                selectedCommit.committer.email ===
-                                  selectedCommit.author.email &&
-                                selectedCommit.committer.timestamp !==
-                                  selectedCommit.author.timestamp && (
-                                  <div className="commit-date">
-                                    {formatDate(
-                                      selectedCommit.committer.timestamp
-                                    )}{" "}
-                                    (Commit date)
-                                  </div>
-                                )}
-                            </div>
+                      ) : (
+                        <CommitTreeView
+                          nodes={commitTree}
+                          selectedPath={selectedTreeFile?.path ?? null}
+                          onSelectFile={setSelectedTreeFile}
+                        />
+                      )}
+                    </Panel>
+                    <Separator className="resize-handle-vertical" />
+                    <Panel defaultSize={70} minSize={30}>
+                      <FileViewer
+                        key={`${selectedTreeFile?.path ?? "none"}:${selectedCommit.id}`}
+                        repoPath={repoPath}
+                        commitId={selectedCommit.id}
+                        file={selectedTreeFile}
+                        onJumpToCommit={handleJumpToCommit}
+                      />
+                    </Panel>
+                  </Group>
+                ) : (
+                  <div
+                    className="commit-details-panel"
+                    onScroll={handleDiffScroll}
+                  >
+                    {selectedCommit ? (
+                      <>
+                        <div className="details-header">
+                          <div className="detail-row">
+                            <span className="detail-label">Subject</span>
+                            <span className="detail-value">
+                              {selectedCommit.message.split("\n")[0]}
+                            </span>
                           </div>
-                        </div>
-                        {(selectedCommit.committer.name !==
-                          selectedCommit.author.name ||
-                          selectedCommit.committer.email !==
-                            selectedCommit.author.email) && (
+                          <div className="detail-row">
+                            <span className="detail-label">ID</span>
+                            <span className="detail-value">
+                              {selectedCommit.id}
+                              {selectedCommit.branches &&
+                                selectedCommit.branches.length > 0 &&
+                                selectedCommit.branches.map((branch, index) => (
+                                  <span
+                                    key={index}
+                                    className={
+                                      branch.is_head
+                                        ? "branch-badge-local-head"
+                                        : branch.is_remote
+                                          ? "branch-badge-remote"
+                                          : "branch-badge-local"
+                                    }
+                                  >
+                                    {branch.name}
+                                  </span>
+                                ))}
+                              {selectedCommit.tags &&
+                                selectedCommit.tags.length > 0 &&
+                                selectedCommit.tags.map((tag, index) => (
+                                  <span key={index} className="tag-badge">
+                                    {tag}
+                                  </span>
+                                ))}
+                            </span>
+                          </div>
+                          <div className="detail-row">
+                            <span className="detail-label">Parents</span>
+                            <span className="detail-value">
+                              {selectedCommit.parents.map((parent, i) => (
+                                <span key={parent}>
+                                  <span className="parent-sha">{parent}</span>
+                                  {i < selectedCommit.parents.length - 1 &&
+                                    ", "}
+                                </span>
+                              ))}
+                            </span>
+                          </div>
                           <div className="detail-row author-row">
-                            <span className="detail-label">Committer</span>
+                            <span className="detail-label">Author</span>
                             <div className="author-info">
                               <div className="avatar">
-                                {selectedCommit.committer.name
+                                {selectedCommit.author.name
                                   .charAt(0)
                                   .toUpperCase()}
                               </div>
                               <div className="author-details">
                                 <div className="author-name">
-                                  {selectedCommit.committer.name} &lt;
-                                  {selectedCommit.committer.email}
+                                  {selectedCommit.author.name} &lt;
+                                  {selectedCommit.author.email}
                                   &gt;
                                 </div>
                                 <div className="author-date">
-                                  {formatDate(
-                                    selectedCommit.committer.timestamp
-                                  )}
+                                  {formatDate(selectedCommit.author.timestamp)}
                                 </div>
+                                {selectedCommit.committer.name ===
+                                  selectedCommit.author.name &&
+                                  selectedCommit.committer.email ===
+                                    selectedCommit.author.email &&
+                                  selectedCommit.committer.timestamp !==
+                                    selectedCommit.author.timestamp && (
+                                    <div className="commit-date">
+                                      {formatDate(
+                                        selectedCommit.committer.timestamp
+                                      )}{" "}
+                                      (Commit date)
+                                    </div>
+                                  )}
                               </div>
                             </div>
                           </div>
-                        )}
-                      </div>
-                      <div className="commit-message-section">
-                        <div className="message-content">
-                          {selectedCommit.message}
-                        </div>
-                      </div>
-                      <div className="commit-files-section">
-                        {commitFiles.length > 0 ? (
-                          <>
-                            <div className="file-list-header">
-                              <span className="file-list-title">
-                                Files ({commitFiles.length})
-                              </span>
-                              <button
-                                className="collapse-all-btn"
-                                onClick={() => {
-                                  if (
-                                    collapsedFiles.size === commitFiles.length
-                                  ) {
-                                    setCollapsedFiles(new Set());
-                                  } else {
-                                    setCollapsedFiles(
-                                      new Set(commitFiles.map((_, i) => i))
-                                    );
-                                  }
-                                }}
-                              >
-                                {collapsedFiles.size === commitFiles.length
-                                  ? "Expand All"
-                                  : "Collapse All"}
-                              </button>
-                            </div>
-                            <div className="file-list">
-                              {commitFiles.map((file, idx) => {
-                                const getFileIcon = () => {
-                                  if (file.status.toLowerCase() === "added")
-                                    return "🟢";
-                                  if (file.status.toLowerCase() === "deleted")
-                                    return "🔴";
-                                  return "🟠";
-                                };
-
-                                return (
-                                  <div
-                                    key={idx}
-                                    className="file-list-item"
-                                    onClick={() => scrollToFile(idx)}
-                                  >
-                                    <span className="file-path">
-                                      <span className="file-status-icon">
-                                        {getFileIcon()}
-                                      </span>
-                                      {file.path}
-                                    </span>
-                                    <span className="file-changes">
-                                      {file.additions > 0 ? (
-                                        <span className="additions">
-                                          +{file.additions}
-                                        </span>
-                                      ) : (
-                                        <span></span>
-                                      )}
-                                      {file.deletions > 0 ? (
-                                        <span className="deletions">
-                                          -{file.deletions}
-                                        </span>
-                                      ) : (
-                                        <span></span>
-                                      )}
-                                    </span>
+                          {(selectedCommit.committer.name !==
+                            selectedCommit.author.name ||
+                            selectedCommit.committer.email !==
+                              selectedCommit.author.email) && (
+                            <div className="detail-row author-row">
+                              <span className="detail-label">Committer</span>
+                              <div className="author-info">
+                                <div className="avatar">
+                                  {selectedCommit.committer.name
+                                    .charAt(0)
+                                    .toUpperCase()}
+                                </div>
+                                <div className="author-details">
+                                  <div className="author-name">
+                                    {selectedCommit.committer.name} &lt;
+                                    {selectedCommit.committer.email}
+                                    &gt;
                                   </div>
-                                );
-                              })}
+                                  <div className="author-date">
+                                    {formatDate(
+                                      selectedCommit.committer.timestamp
+                                    )}
+                                  </div>
+                                </div>
+                              </div>
                             </div>
-                            <div className="file-diff-container">
-                              {commitFiles.map((file, idx) => (
-                                <div
-                                  key={idx}
-                                  id={`file-diff-${idx}`}
-                                  className="file-section"
+                          )}
+                        </div>
+                        <div className="commit-message-section">
+                          <div className="message-content">
+                            {selectedCommit.message}
+                          </div>
+                        </div>
+                        <div className="commit-files-section">
+                          {commitFiles.length > 0 ? (
+                            <>
+                              <div className="file-list-header">
+                                <span className="file-list-title">
+                                  Files ({commitFiles.length})
+                                </span>
+                                <button
+                                  className="collapse-all-btn"
+                                  onClick={() => {
+                                    if (
+                                      collapsedFiles.size === commitFiles.length
+                                    ) {
+                                      setCollapsedFiles(new Set());
+                                    } else {
+                                      setCollapsedFiles(
+                                        new Set(commitFiles.map((_, i) => i))
+                                      );
+                                    }
+                                  }}
                                 >
-                                  <div className="file-diff-header">
-                                    <span className="file-header-left">
-                                      <span
-                                        className="collapse-icon"
-                                        onClick={() => toggleFileCollapse(idx)}
-                                      >
-                                        {collapsedFiles.has(idx) ? "▶" : "▼"}
-                                      </span>
+                                  {collapsedFiles.size === commitFiles.length
+                                    ? "Expand All"
+                                    : "Collapse All"}
+                                </button>
+                              </div>
+                              <div className="file-list">
+                                {commitFiles.map((file, idx) => {
+                                  const getFileIcon = () => {
+                                    if (file.status.toLowerCase() === "added")
+                                      return "🟢";
+                                    if (file.status.toLowerCase() === "deleted")
+                                      return "🔴";
+                                    return "🟠";
+                                  };
+
+                                  return (
+                                    <div
+                                      key={idx}
+                                      className="file-list-item"
+                                      onClick={() => scrollToFile(idx)}
+                                    >
                                       <span className="file-path">
+                                        <span className="file-status-icon">
+                                          {getFileIcon()}
+                                        </span>
                                         {file.path}
                                       </span>
-                                    </span>
-                                    <span className="file-changes">
-                                      {file.additions > 0 && (
-                                        <span className="additions">
-                                          +{file.additions}
-                                        </span>
-                                      )}
-                                      {file.deletions > 0 && (
-                                        <span className="deletions">
-                                          -{file.deletions}
-                                        </span>
-                                      )}
-                                    </span>
-                                  </div>
-                                  {!collapsedFiles.has(idx) && (
-                                    <div className="file-diff">
-                                      {file.lines.map((line, i) => {
-                                        let className = "diff-line";
-                                        if (line.origin === "+") {
-                                          className += " diff-add";
-                                        } else if (line.origin === "-") {
-                                          className += " diff-remove";
-                                        } else if (line.origin === "@") {
-                                          className += " diff-hunk";
-                                        }
-
-                                        const content = line.content.replace(
-                                          /\n$/,
-                                          ""
-                                        );
-
-                                        return (
-                                          <div key={i} className={className}>
-                                            <span className="line-number">
-                                              {line.old_lineno || ""}
-                                            </span>
-                                            <span className="line-number">
-                                              {line.new_lineno || ""}
-                                            </span>
-                                            <span className="line-origin">
-                                              {line.origin === " "
-                                                ? " "
-                                                : line.origin}
-                                            </span>
-                                            <span className="line-content">
-                                              {content || " "}
-                                            </span>
-                                          </div>
-                                        );
-                                      })}
+                                      <span className="file-changes">
+                                        {file.additions > 0 ? (
+                                          <span className="additions">
+                                            +{file.additions}
+                                          </span>
+                                        ) : (
+                                          <span></span>
+                                        )}
+                                        {file.deletions > 0 ? (
+                                          <span className="deletions">
+                                            -{file.deletions}
+                                          </span>
+                                        ) : (
+                                          <span></span>
+                                        )}
+                                      </span>
                                     </div>
-                                  )}
-                                </div>
-                              ))}
+                                  );
+                                })}
+                              </div>
+                              <div className="file-diff-container">
+                                {commitFiles.map((file, idx) => (
+                                  <div
+                                    key={idx}
+                                    id={`file-diff-${idx}`}
+                                    className="file-section"
+                                  >
+                                    <div className="file-diff-header">
+                                      <span className="file-header-left">
+                                        <span
+                                          className="collapse-icon"
+                                          onClick={() =>
+                                            toggleFileCollapse(idx)
+                                          }
+                                        >
+                                          {collapsedFiles.has(idx) ? "▶" : "▼"}
+                                        </span>
+                                        <span className="file-path">
+                                          {file.path}
+                                        </span>
+                                      </span>
+                                      <span className="file-changes">
+                                        {file.additions > 0 && (
+                                          <span className="additions">
+                                            +{file.additions}
+                                          </span>
+                                        )}
+                                        {file.deletions > 0 && (
+                                          <span className="deletions">
+                                            -{file.deletions}
+                                          </span>
+                                        )}
+                                      </span>
+                                    </div>
+                                    {!collapsedFiles.has(idx) && (
+                                      <div className="file-diff">
+                                        {file.lines.map((line, i) => {
+                                          let className = "diff-line";
+                                          if (line.origin === "+") {
+                                            className += " diff-add";
+                                          } else if (line.origin === "-") {
+                                            className += " diff-remove";
+                                          } else if (line.origin === "@") {
+                                            className += " diff-hunk";
+                                          }
+
+                                          const content = line.content.replace(
+                                            /\n$/,
+                                            ""
+                                          );
+
+                                          return (
+                                            <div key={i} className={className}>
+                                              <span className="line-number">
+                                                {line.old_lineno || ""}
+                                              </span>
+                                              <span className="line-number">
+                                                {line.new_lineno || ""}
+                                              </span>
+                                              <span className="line-origin">
+                                                {line.origin === " "
+                                                  ? " "
+                                                  : line.origin}
+                                              </span>
+                                              <span className="line-content">
+                                                {content || " "}
+                                              </span>
+                                            </div>
+                                          );
+                                        })}
+                                      </div>
+                                    )}
+                                  </div>
+                                ))}
+                              </div>
+                              {showBackToTop && (
+                                <button
+                                  className="back-to-top-btn"
+                                  onClick={scrollToTop}
+                                >
+                                  ↑ Top
+                                </button>
+                              )}
+                            </>
+                          ) : (
+                            <div className="file-diff">
+                              <pre>Loading diff...</pre>
                             </div>
-                            {showBackToTop && (
-                              <button
-                                className="back-to-top-btn"
-                                onClick={scrollToTop}
-                              >
-                                ↑ Top
-                              </button>
-                            )}
-                          </>
-                        ) : (
-                          <div className="file-diff">
-                            <pre>Loading diff...</pre>
-                          </div>
-                        )}
+                          )}
+                        </div>
+                      </>
+                    ) : (
+                      <div className="no-selection">
+                        Select a commit to view details
                       </div>
-                    </>
-                  ) : (
-                    <div className="no-selection">
-                      Select a commit to view details
-                    </div>
-                  )}
-                </div>
+                    )}
+                  </div>
+                )}
               </Panel>
             </Group>
           ) : (

@@ -7,6 +7,9 @@ interface CommitHistoryProps {
   repoPath: string;
   onCommitSelect: (commit: GitCommit | null) => void;
   currentBranch?: string;
+  jumpTarget?: { id: string; nonce: number } | null;
+  commitViewMode: "detail" | "tree";
+  onCommitViewModeChange: (mode: "detail" | "tree") => void;
 }
 
 interface GitAuthor {
@@ -44,6 +47,9 @@ export function CommitHistory({
   repoPath,
   onCommitSelect,
   currentBranch,
+  jumpTarget,
+  commitViewMode,
+  onCommitViewModeChange,
 }: CommitHistoryProps) {
   const [commits, setCommits] = useState<{
     All: GitCommit[];
@@ -57,6 +63,10 @@ export function CommitHistory({
   const [branchFilter, setBranchFilter] = useState<string>("All");
   const selectedCommitRef = useRef(selectedCommit);
   selectedCommitRef.current = selectedCommit;
+  const commitsRef = useRef(commits);
+  commitsRef.current = commits;
+  const branchFilterRef = useRef(branchFilter);
+  branchFilterRef.current = branchFilter;
 
   const loadAllCommits = useCallback(async () => {
     try {
@@ -155,6 +165,23 @@ export function CommitHistory({
     }
   }, [branchFilter]);
 
+  useEffect(() => {
+    if (!jumpTarget) return;
+    const found = commitsRef.current.All.find((c) => c.id === jumpTarget.id);
+    if (found) {
+      if (branchFilterRef.current !== "All") setBranchFilter("All");
+      setSelectedCommit(found);
+      onCommitSelect(found);
+      setTimeout(() => {
+        const element = document.querySelector(
+          `[data-commit-id="${found.id}"]`
+        );
+        if (element)
+          element.scrollIntoView({ behavior: "smooth", block: "center" });
+      }, 0);
+    }
+  }, [jumpTarget, onCommitSelect]);
+
   const handleGraphResize = (e: React.MouseEvent) => {
     const startX = e.clientX;
     const startWidth = graphWidth;
@@ -214,26 +241,76 @@ export function CommitHistory({
   return (
     <div className="commit-history">
       <div className="branch-filter-bar">
-        <button
-          className={`filter-btn ${branchFilter === "All" ? "active" : ""}`}
-          onClick={() => setBranchFilter("All")}
-        >
-          All
-        </button>
-        <button
-          className={`filter-btn ${branchFilter === "Local" ? "active" : ""}`}
-          onClick={() => setBranchFilter("Local")}
-        >
-          Local
-        </button>
-        {currentBranch && (
+        <div className="filter-btn-group">
           <button
-            className={`filter-btn ${branchFilter === "Current" ? "active" : ""}`}
-            onClick={() => setBranchFilter("Current")}
+            className={`filter-btn ${branchFilter === "All" ? "active" : ""}`}
+            onClick={() => setBranchFilter("All")}
           >
-            "{currentBranch}"
+            All
           </button>
-        )}
+          <button
+            className={`filter-btn ${branchFilter === "Local" ? "active" : ""}`}
+            onClick={() => setBranchFilter("Local")}
+          >
+            Local
+          </button>
+          {currentBranch && (
+            <button
+              className={`filter-btn ${branchFilter === "Current" ? "active" : ""}`}
+              onClick={() => setBranchFilter("Current")}
+            >
+              "{currentBranch}"
+            </button>
+          )}
+        </div>
+        <div className="filter-btn-group">
+          <button
+            className={`filter-btn icon-btn ${commitViewMode === "detail" ? "active" : ""}`}
+            onClick={() => onCommitViewModeChange("detail")}
+            title="Detailed View"
+            aria-label="Detailed View"
+          >
+            <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
+              <rect x="0" y="1" width="2" height="2" />
+              <rect x="4" y="1" width="12" height="2" />
+              <rect x="0" y="7" width="2" height="2" />
+              <rect x="4" y="7" width="12" height="2" />
+              <rect x="0" y="13" width="2" height="2" />
+              <rect x="4" y="13" width="12" height="2" />
+            </svg>
+          </button>
+          <button
+            className={`filter-btn icon-btn ${commitViewMode === "tree" ? "active" : ""}`}
+            onClick={() => onCommitViewModeChange("tree")}
+            title="Tree View"
+            aria-label="Tree View"
+          >
+            <svg
+              width="14"
+              height="14"
+              viewBox="0 0 16 16"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.5"
+            >
+              <rect x="6.5" y="0.5" width="3" height="3" fill="currentColor" />
+              <line x1="8" y1="3.5" x2="8" y2="8" />
+              <line x1="2" y1="8" x2="14" y2="8" />
+              <line x1="2" y1="8" x2="2" y2="10.5" />
+              <line x1="8" y1="8" x2="8" y2="10.5" />
+              <line x1="14" y1="8" x2="14" y2="10.5" />
+              <rect x="0.5" y="10.5" width="3" height="3" fill="currentColor" />
+              <rect x="6.5" y="10.5" width="3" height="3" fill="currentColor" />
+              <rect
+                x="12.5"
+                y="10.5"
+                width="3"
+                height="3"
+                fill="currentColor"
+              />
+            </svg>
+          </button>
+        </div>
       </div>
       <div className="commit-table-container">
         <table className="commit-table">

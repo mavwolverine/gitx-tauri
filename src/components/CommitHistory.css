@@ -7,10 +7,17 @@
 
 .branch-filter-bar {
   display: flex;
+  align-items: center;
+  justify-content: space-between;
   gap: 4px;
   padding: 8px 12px;
   background: #252526;
   border-bottom: 1px solid #333;
+}
+
+.filter-btn-group {
+  display: flex;
+  gap: 4px;
 }
 
 .filter-btn {
@@ -30,6 +37,13 @@
 .filter-btn.active {
   background: #094771;
   border-color: #007acc;
+}
+
+.icon-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 4px 8px;
 }
 
 .commit-table-container {

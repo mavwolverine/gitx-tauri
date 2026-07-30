@@ -65,15 +65,41 @@ fn get_submodules(path: String) -> Result<Vec<git_ops::GitSubmodule>, String> {
     git_ops::get_submodules(&repo).map_err(|e| e.to_string())
 }
 
+const WATCH_IGNORED_DIRS: [&str; 6] = [
+    "target",
+    "node_modules",
+    "dist",
+    "build",
+    ".venv",
+    "__pycache__",
+];
+
+fn is_watch_noise(path: &Path) -> bool {
+    path.components().any(|c| {
+        c.as_os_str()
+            .to_str()
+            .map(|s| WATCH_IGNORED_DIRS.contains(&s))
+            .unwrap_or(false)
+    })
+}
+
 #[tauri::command]
 fn watch_repo(window: tauri::Window, repo_path: String) -> Result<(), String> {
-    let (tx, rx) = channel();
+    let (tx, rx) = channel::<notify::Event>();
 
     let mut watcher = RecommendedWatcher::new(
-        move |res: Result<notify::Event, notify::Error>| {
-            if res.is_ok() {
-                let _ = tx.send(());
+        move |res: Result<notify::Event, notify::Error>| match res {
+            Ok(event) => {
+                if event.paths.iter().any(|p| !is_watch_noise(p)) {
+                    let _ = tx.send(event);
+                } else {
+                    println!(
+                        "[watch_repo] ignored (noise dir): {:?} {:?}",
+                        event.kind, event.paths
+                    );
+                }
             }
+            Err(e) => println!("[watch_repo] watcher error: {e}"),
         },
         Config::default().with_poll_interval(Duration::from_secs(2)),
     )
@@ -85,7 +111,19 @@ fn watch_repo(window: tauri::Window, repo_path: String) -> Result<(), String> {
 
     std::thread::spawn(move || {
         let _watcher = watcher;
-        while rx.recv().is_ok() {
+        while let Ok(first) = rx.recv() {
+            // Coalesce bursts of events (e.g. a checkout touching many files)
+            // into a single refresh instead of one per fs event.
+            let mut batch = vec![first];
+            while let Ok(event) = rx.recv_timeout(Duration::from_millis(300)) {
+                batch.push(event);
+            }
+            println!(
+                "[watch_repo] repo-changed: {} event(s) triggered it, e.g. {:?} {:?}",
+                batch.len(),
+                batch[0].kind,
+                batch[0].paths
+            );
             let _ = window.emit("repo-changed", ());
         }
     });
@@ -224,6 +262,42 @@ fn get_commit_diff(path: String, commit_id: String) -> Result<Vec<git_ops::Commi
 }
 
 #[tauri::command]
+fn get_commit_tree(path: String, commit_id: String) -> Result<Vec<git_ops::TreeNode>, String> {
+    let repo = git_ops::open_repository(&path).map_err(|e| e.to_string())?;
+    git_ops::get_commit_tree(&repo, &commit_id).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn get_file_content(
+    path: String,
+    commit_id: String,
+    file_path: String,
+) -> Result<git_ops::FileContent, String> {
+    let repo = git_ops::open_repository(&path).map_err(|e| e.to_string())?;
+    git_ops::get_file_content(&repo, &commit_id, &file_path).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn get_file_blame(
+    path: String,
+    commit_id: String,
+    file_path: String,
+) -> Result<Vec<git_ops::BlameLine>, String> {
+    let repo = git_ops::open_repository(&path).map_err(|e| e.to_string())?;
+    git_ops::get_file_blame(&repo, &commit_id, &file_path).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn get_file_history(
+    path: String,
+    commit_id: String,
+    file_path: String,
+) -> Result<Vec<git_ops::FileHistoryEntry>, String> {
+    let repo = git_ops::open_repository(&path).map_err(|e| e.to_string())?;
+    git_ops::get_file_history(&repo, &commit_id, &file_path).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
 fn open_repo_window(app: tauri::AppHandle, repo_path: String) -> Result<(), String> {
     let label = format!("repo-{}", repo_path.replace(['/', '\\', ':', ' '], "-"));
 
@@ -294,7 +368,11 @@ pub fn run() {
             pull_remote,
             get_commits,
             get_branch_head,
-            get_commit_diff
+            get_commit_diff,
+            get_commit_tree,
+            get_file_content,
+            get_file_blame,
+            get_file_history
         ])
         .run(tauri::generate_context!())
         .expect("error while running GitX-Tauri");

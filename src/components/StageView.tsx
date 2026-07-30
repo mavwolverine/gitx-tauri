@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { message } from "@tauri-apps/plugin-dialog";
@@ -30,24 +30,10 @@ export function StageView({ repoPath }: StageViewProps) {
     staged: boolean;
     status: string;
   } | null>(null);
-
-  useEffect(() => {
-    loadStatus();
-
-    const unlisten = listen("repo-changed", () => {
-      loadStatus();
-    });
-
-    return () => {
-      unlisten.then((fn) => fn()).catch(() => {});
-    };
-  }, [repoPath]);
-
-  useEffect(() => {
-    const handleClick = () => setContextMenu(null);
-    window.addEventListener("click", handleClick);
-    return () => window.removeEventListener("click", handleClick);
-  }, []);
+  const selectedFileRef = useRef(selectedFile);
+  const selectedStagedRef = useRef(selectedStaged);
+  selectedFileRef.current = selectedFile;
+  selectedStagedRef.current = selectedStaged;
 
   const getStatusPriority = (status: string) => {
     const s = status[0].toUpperCase();
@@ -56,7 +42,7 @@ export function StageView({ repoPath }: StageViewProps) {
     return 0;
   };
 
-  const loadStatus = async () => {
+  const loadStatus = useCallback(async () => {
     try {
       const files = await invoke<FileStatus[]>("get_status", {
         path: repoPath,
@@ -75,13 +61,14 @@ export function StageView({ repoPath }: StageViewProps) {
       setStagedFiles(staged);
 
       // Clear selection if selected file no longer exists in the same state
-      if (selectedFile) {
-        const fileExists = selectedStaged
-          ? staged.some((f) => f.path === selectedFile)
-          : unstaged.some((f) => f.path === selectedFile);
+      const currentSelectedFile = selectedFileRef.current;
+      if (currentSelectedFile) {
+        const fileExists = selectedStagedRef.current
+          ? staged.some((f) => f.path === currentSelectedFile)
+          : unstaged.some((f) => f.path === currentSelectedFile);
         console.log("Check file exists:", {
-          selectedFile,
-          selectedStaged,
+          selectedFile: currentSelectedFile,
+          selectedStaged: selectedStagedRef.current,
           fileExists,
           stagedCount: staged.length,
           unstagedCount: unstaged.length,
@@ -100,7 +87,25 @@ export function StageView({ repoPath }: StageViewProps) {
     } catch (error) {
       console.error("Failed to load status:", error);
     }
-  };
+  }, [repoPath]);
+
+  useEffect(() => {
+    loadStatus();
+
+    const unlisten = listen("repo-changed", () => {
+      loadStatus();
+    });
+
+    return () => {
+      unlisten.then((fn) => fn()).catch(() => {});
+    };
+  }, [loadStatus]);
+
+  useEffect(() => {
+    const handleClick = () => setContextMenu(null);
+    window.addEventListener("click", handleClick);
+    return () => window.removeEventListener("click", handleClick);
+  }, []);
 
   const loadDiff = async (filePath: string, staged: boolean) => {
     try {

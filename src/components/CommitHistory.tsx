@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import "./CommitHistory.css";
 
@@ -54,62 +54,10 @@ export function CommitHistory({
   const [graphWidth, setGraphWidth] = useState(60);
   const [messageWidth, setMessageWidth] = useState(400);
   const [branchFilter, setBranchFilter] = useState<string>("All");
+  const selectedCommitRef = useRef(selectedCommit);
+  selectedCommitRef.current = selectedCommit;
 
-  useEffect(() => {
-    loadAllCommits();
-  }, [repoPath, currentBranch]);
-
-  useEffect(() => {
-    // Scroll to selected commit when filter changes
-    if (selectedCommit) {
-      setTimeout(() => {
-        const element = document.querySelector(
-          `[data-commit-id="${selectedCommit.id}"]`
-        );
-        if (element) {
-          element.scrollIntoView({ behavior: "smooth", block: "center" });
-        }
-      }, 0);
-    }
-  }, [branchFilter]);
-
-  const handleGraphResize = (e: React.MouseEvent) => {
-    const startX = e.clientX;
-    const startWidth = graphWidth;
-
-    const handleMouseMove = (moveEvent: MouseEvent) => {
-      const diff = moveEvent.clientX - startX;
-      setGraphWidth(Math.max(40, startWidth + diff));
-    };
-
-    const handleMouseUp = () => {
-      document.removeEventListener("mousemove", handleMouseMove);
-      document.removeEventListener("mouseup", handleMouseUp);
-    };
-
-    document.addEventListener("mousemove", handleMouseMove);
-    document.addEventListener("mouseup", handleMouseUp);
-  };
-
-  const handleResize = (e: React.MouseEvent) => {
-    const startX = e.clientX;
-    const startWidth = messageWidth;
-
-    const handleMouseMove = (moveEvent: MouseEvent) => {
-      const diff = moveEvent.clientX - startX;
-      setMessageWidth(Math.max(200, startWidth + diff));
-    };
-
-    const handleMouseUp = () => {
-      document.removeEventListener("mousemove", handleMouseMove);
-      document.removeEventListener("mouseup", handleMouseUp);
-    };
-
-    document.addEventListener("mousemove", handleMouseMove);
-    document.addEventListener("mouseup", handleMouseUp);
-  };
-
-  const loadAllCommits = async () => {
+  const loadAllCommits = useCallback(async () => {
     try {
       setLoading(true);
       // Load all commits, local commits, and current branch commits
@@ -175,6 +123,61 @@ export function CommitHistory({
     } finally {
       setLoading(false);
     }
+  }, [repoPath, currentBranch, onCommitSelect]);
+
+  useEffect(() => {
+    loadAllCommits();
+  }, [loadAllCommits]);
+
+  useEffect(() => {
+    // Scroll to selected commit when filter changes
+    const commit = selectedCommitRef.current;
+    if (commit) {
+      setTimeout(() => {
+        const element = document.querySelector(
+          `[data-commit-id="${commit.id}"]`
+        );
+        if (element) {
+          element.scrollIntoView({ behavior: "smooth", block: "center" });
+        }
+      }, 0);
+    }
+  }, [branchFilter]);
+
+  const handleGraphResize = (e: React.MouseEvent) => {
+    const startX = e.clientX;
+    const startWidth = graphWidth;
+
+    const handleMouseMove = (moveEvent: MouseEvent) => {
+      const diff = moveEvent.clientX - startX;
+      setGraphWidth(Math.max(40, startWidth + diff));
+    };
+
+    const handleMouseUp = () => {
+      document.removeEventListener("mousemove", handleMouseMove);
+      document.removeEventListener("mouseup", handleMouseUp);
+    };
+
+    document.addEventListener("mousemove", handleMouseMove);
+    document.addEventListener("mouseup", handleMouseUp);
+  };
+
+  const handleResize = (e: React.MouseEvent) => {
+    const startX = e.clientX;
+    const startWidth = messageWidth;
+
+    const handleMouseMove = (moveEvent: MouseEvent) => {
+      const diff = moveEvent.clientX - startX;
+      setMessageWidth(Math.max(200, startWidth + diff));
+    };
+
+    const handleMouseUp = () => {
+      document.removeEventListener("mousemove", handleMouseMove);
+      document.removeEventListener("mouseup", handleMouseUp);
+    };
+
+    document.addEventListener("mousemove", handleMouseMove);
+    document.addEventListener("mouseup", handleMouseUp);
   };
 
   const handleCommitClick = (commit: GitCommit) => {

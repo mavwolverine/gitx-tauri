@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { message } from "@tauri-apps/plugin-dialog";
@@ -75,6 +75,49 @@ function RepoView({ repoPath }: RepoViewProps) {
     [key: string]: boolean;
   }>({});
 
+  const loadBranches = useCallback(async () => {
+    try {
+      const branchList = await invoke<GitBranch[]>("get_branches", {
+        path: repoPath,
+      });
+      setBranches(branchList);
+    } catch (error) {
+      console.error("Failed to load branches:", error);
+    }
+  }, [repoPath]);
+
+  const loadRemotes = useCallback(async () => {
+    try {
+      const remoteList = await invoke<GitRemote[]>("get_remotes", {
+        path: repoPath,
+      });
+      // Deduplicate by name
+      const uniqueRemotes = remoteList.filter(
+        (remote, index, self) =>
+          index === self.findIndex((r) => r.name === remote.name)
+      );
+      setRemotes(uniqueRemotes);
+      const initialCollapsed: { [key: string]: boolean } = {};
+      uniqueRemotes.forEach((remote) => {
+        initialCollapsed[remote.name] = true;
+      });
+      setRemoteCollapsed(initialCollapsed);
+    } catch (error) {
+      console.error("Failed to load remotes:", error);
+    }
+  }, [repoPath]);
+
+  const loadSubmodules = useCallback(async () => {
+    try {
+      const submoduleList = await invoke<GitSubmodule[]>("get_submodules", {
+        path: repoPath,
+      });
+      setSubmodules(submoduleList);
+    } catch (error) {
+      console.error("Failed to load submodules:", error);
+    }
+  }, [repoPath]);
+
   useEffect(() => {
     const name = repoPath.split(/[/\\]/).pop() || repoPath;
     setRepoName(name);
@@ -97,39 +140,7 @@ function RepoView({ repoPath }: RepoViewProps) {
     return () => {
       unlisten.then((fn) => fn());
     };
-  }, [repoPath]);
-
-  const loadBranches = async () => {
-    try {
-      const branchList = await invoke<GitBranch[]>("get_branches", {
-        path: repoPath,
-      });
-      setBranches(branchList);
-    } catch (error) {
-      console.error("Failed to load branches:", error);
-    }
-  };
-
-  const loadRemotes = async () => {
-    try {
-      const remoteList = await invoke<GitRemote[]>("get_remotes", {
-        path: repoPath,
-      });
-      // Deduplicate by name
-      const uniqueRemotes = remoteList.filter(
-        (remote, index, self) =>
-          index === self.findIndex((r) => r.name === remote.name)
-      );
-      setRemotes(uniqueRemotes);
-      const initialCollapsed: { [key: string]: boolean } = {};
-      uniqueRemotes.forEach((remote) => {
-        initialCollapsed[remote.name] = true;
-      });
-      setRemoteCollapsed(initialCollapsed);
-    } catch (error) {
-      console.error("Failed to load remotes:", error);
-    }
-  };
+  }, [repoPath, loadBranches, loadRemotes, loadSubmodules]);
 
   const loadRemoteBranches = async (remoteName: string) => {
     try {
@@ -151,17 +162,6 @@ function RepoView({ repoPath }: RepoViewProps) {
       setTags(tagList);
     } catch (error) {
       console.error("Failed to load tags:", error);
-    }
-  };
-
-  const loadSubmodules = async () => {
-    try {
-      const submoduleList = await invoke<GitSubmodule[]>("get_submodules", {
-        path: repoPath,
-      });
-      setSubmodules(submoduleList);
-    } catch (error) {
-      console.error("Failed to load submodules:", error);
     }
   };
 

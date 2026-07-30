@@ -269,23 +269,26 @@ function RepoView({ repoPath }: RepoViewProps) {
     })}`;
   };
 
-  const handleCommitSelect = async (commit: GitCommit | null) => {
-    setSelectedCommit(commit);
-    if (commit) {
-      try {
-        const files = await invoke<CommitFile[]>("get_commit_diff", {
-          path: repoPath,
-          commitId: commit.id,
-        });
-        setCommitFiles(files);
-      } catch (error) {
-        console.error("Failed to load commit diff:", error);
+  const handleCommitSelect = useCallback(
+    async (commit: GitCommit | null) => {
+      setSelectedCommit(commit);
+      if (commit) {
+        try {
+          const files = await invoke<CommitFile[]>("get_commit_diff", {
+            path: repoPath,
+            commitId: commit.id,
+          });
+          setCommitFiles(files);
+        } catch (error) {
+          console.error("Failed to load commit diff:", error);
+          setCommitFiles([]);
+        }
+      } else {
         setCommitFiles([]);
       }
-    } else {
-      setCommitFiles([]);
-    }
-  };
+    },
+    [repoPath]
+  );
 
   const scrollToFile = (index: number) => {
     const element = document.getElementById(`file-diff-${index}`);

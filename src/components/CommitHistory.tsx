@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
+import { listen } from "@tauri-apps/api/event";
 import "./CommitHistory.css";
 
 interface CommitHistoryProps {
@@ -127,6 +128,16 @@ export function CommitHistory({
 
   useEffect(() => {
     loadAllCommits();
+  }, [loadAllCommits]);
+
+  useEffect(() => {
+    const unlisten = listen("repo-changed", () => {
+      loadAllCommits();
+    });
+
+    return () => {
+      unlisten.then((fn) => fn()).catch(() => {});
+    };
   }, [loadAllCommits]);
 
   useEffect(() => {

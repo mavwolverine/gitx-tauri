@@ -2,7 +2,7 @@ use git2::{Cred, FetchOptions, RemoteCallbacks, Repository};
 use serde::Serialize;
 use std::path::Path;
 
-#[derive(Clone, Serialize)]
+#[derive(Clone, Debug, Serialize)]
 pub struct GitBranch {
     pub name: String,
     pub is_head: bool,
@@ -36,7 +36,7 @@ pub struct GitAuthor {
     pub timestamp: String,
 }
 
-#[derive(Serialize)]
+#[derive(Debug, Serialize)]
 pub struct GitCommit {
     pub id: String,
     pub message: String,
@@ -49,7 +49,7 @@ pub struct GitCommit {
     pub lines: Vec<GraphLine>,
 }
 
-#[derive(Serialize, Clone)]
+#[derive(Clone, Debug, Serialize)]
 pub struct GraphLine {
     pub upper: bool,  // true = upper half, false = lower half
     pub from: usize,  // starting lane
@@ -57,7 +57,7 @@ pub struct GraphLine {
     pub color: usize, // color index
 }
 
-#[derive(Serialize, Clone)]
+#[derive(Clone, Serialize)]
 #[allow(dead_code)]
 pub struct GraphInfo {
     pub lane: usize,
@@ -700,7 +700,7 @@ pub fn get_commits(
         }
     }
 
-    revwalk.set_sorting(git2::Sort::TIME)?;
+    revwalk.set_sorting(git2::Sort::TIME | git2::Sort::TOPOLOGICAL)?;
 
     let mut branch_map: std::collections::HashMap<git2::Oid, Vec<GitBranch>> =
         std::collections::HashMap::new();

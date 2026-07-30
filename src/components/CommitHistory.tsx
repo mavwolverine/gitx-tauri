@@ -325,7 +325,7 @@ export function CommitHistory({
                     </td>
                     <td className="author">{commit.author.name}</td>
                     <td className="date">
-                      {formatDate(commit.author.timestamp)}
+                      {formatDate(commit.committer.timestamp)}
                     </td>
                   </tr>
                 );

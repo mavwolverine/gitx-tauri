@@ -15,7 +15,7 @@
     "@tauri-apps/api": "^2.11.1",
     "@tauri-apps/plugin-dialog": "^2.7.2",
     "@tauri-apps/plugin-opener": "^2.5.4",
-    "pnpm": "^10.29.3",
+    "pnpm": "^11.17.0",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
     "react-resizable-panels": "^4.12.2"
@@ -30,11 +30,5 @@
     "typescript": "~7.0.2",
     "vite": "^8.1.5"
   },
-  "packageManager": "pnpm@10.23.0+sha512.21c4e5698002ade97e4efe8b8b4a89a8de3c85a37919f957e7a0f30f38fbc5bbdd05980ffe29179b2fb6e6e691242e098d945d1601772cad0fef5fb6411e2a4b",
-  "pnpm": {
-    "overrides": {
-      "@emnapi/core": "2.0.0-alpha.3",
-      "@emnapi/runtime": "2.0.0-alpha.3"
-    }
-  }
+  "packageManager": "pnpm@11.17.0+sha512.cca3cea332ad254bb84145f966d19f4879615210346fc92c79a047f23a0d7b3cca3c3792f0076ba1f1831d277efbcf0a9119b31a9a60eca7fb3d6231f331ef72"
 }

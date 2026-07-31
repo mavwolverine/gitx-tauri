@@ -612,11 +612,48 @@ pub fn discard_hunk(
     Ok(())
 }
 
+// Unlike the `git` CLI, libgit2's `Repository::signature()` won't fall back to
+// an OS-derived name when `user.name` isn't set in git config. Shell out to
+// `git var`, which is what the CLI itself uses, to match its behavior.
+fn resolve_author_signature(repo: &Repository) -> Result<git2::Signature<'static>, git2::Error> {
+    if let Ok(sig) = repo.signature() {
+        return Ok(sig.to_owned());
+    }
+
+    let workdir = repo
+        .workdir()
+        .ok_or_else(|| git2::Error::from_str("No working directory"))?;
+
+    let output = std::process::Command::new("git")
+        .args(["var", "GIT_AUTHOR_IDENT"])
+        .current_dir(workdir)
+        .output()
+        .map_err(|e| git2::Error::from_str(&format!("Failed to run git var: {}", e)))?;
+
+    if !output.status.success() {
+        return Err(git2::Error::from_str(
+            "Git identity not set. Run `git config --global user.name \"Your Name\"` \
+             and `git config --global user.email \"you@example.com\"`, then try again.",
+        ));
+    }
+
+    let ident = String::from_utf8_lossy(&output.stdout);
+    let ident = ident.trim();
+    let (name, rest) = ident
+        .split_once('<')
+        .ok_or_else(|| git2::Error::from_str("Could not parse git identity"))?;
+    let (email, _) = rest
+        .split_once('>')
+        .ok_or_else(|| git2::Error::from_str("Could not parse git identity"))?;
+
+    git2::Signature::now(name.trim(), email.trim())
+}
+
 pub fn create_commit(repo: &Repository, message: &str, amend: bool) -> Result<String, git2::Error> {
     let mut index = repo.index()?;
     let tree_id = index.write_tree()?;
     let tree = repo.find_tree(tree_id)?;
-    let signature = repo.signature()?;
+    let signature = resolve_author_signature(repo)?;
 
     if amend {
         let head = repo.head()?;

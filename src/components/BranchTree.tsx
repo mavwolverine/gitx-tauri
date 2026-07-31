@@ -18,9 +18,11 @@ interface BranchTreeProps {
   onCreateTag?: (fromBranch: string) => void;
   onFetch?: (branch: string, remote: string) => void;
   onPull?: (branch: string, remote: string) => void;
+  onDeleteBranch?: (branch: string, remoteContext?: string) => void;
   level?: number;
   prefix?: string;
   remotes?: Array<{ name: string }>;
+  remoteName?: string;
 }
 
 export function BranchTree({
@@ -32,9 +34,11 @@ export function BranchTree({
   onCreateTag,
   onFetch,
   onPull,
+  onDeleteBranch,
   level = 0,
   prefix = "",
   remotes = [],
+  remoteName,
 }: BranchTreeProps) {
   const [folderCollapsed, setFolderCollapsed] = useState<{
     [key: string]: boolean;
@@ -190,9 +194,23 @@ export function BranchTree({
               Checkout
             </div>
           )}
-          {onCheckoutBranch && (onCreateBranch || onCreateTag) && (
-            <div className="context-menu-separator" />
+          {onDeleteBranch && (
+            <div
+              className={`context-menu-item ${contextMenu.isHead ? "disabled" : ""}`}
+              onClick={() => {
+                if (!contextMenu.isHead) {
+                  onDeleteBranch(contextMenu.branch, remoteName);
+                  setContextMenu(null);
+                }
+              }}
+            >
+              Delete Branch...
+            </div>
           )}
+          {(onCheckoutBranch || onDeleteBranch) &&
+            (onCreateBranch || onCreateTag) && (
+              <div className="context-menu-separator" />
+            )}
           {onCreateBranch && (
             <div
               className="context-menu-item"

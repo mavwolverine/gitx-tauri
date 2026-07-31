@@ -8,6 +8,10 @@ import { StageView } from "./components/StageView";
 import { CommitHistory, GitCommit } from "./components/CommitHistory";
 import { CommitTreeView, TreeNode } from "./components/CommitTreeView";
 import { FileViewer } from "./components/FileViewer";
+import {
+  DeleteBranchDialog,
+  BranchDeleteInfo,
+} from "./components/DeleteBranchDialog";
 import "./RepoView.css";
 
 interface RepoViewProps {
@@ -81,6 +85,11 @@ function RepoView({ repoPath }: RepoViewProps) {
   const [jumpTarget, setJumpTarget] = useState<{
     id: string;
     nonce: number;
+  } | null>(null);
+  const [deleteBranchTarget, setDeleteBranchTarget] = useState<{
+    branch: string;
+    remoteContext?: string;
+    info: BranchDeleteInfo;
   } | null>(null);
   const selectedCommitRef = useRef(selectedCommit);
   selectedCommitRef.current = selectedCommit;
@@ -201,6 +210,66 @@ function RepoView({ repoPath }: RepoViewProps) {
         title: "Checkout Error",
         kind: "error",
       });
+    }
+  };
+
+  const handleDeleteBranch = async (branch: string, remoteContext?: string) => {
+    try {
+      const info = await invoke<BranchDeleteInfo>("get_branch_delete_info", {
+        path: repoPath,
+        branchName: branch,
+        remoteContext: remoteContext ?? null,
+      });
+      setDeleteBranchTarget({ branch, remoteContext, info });
+    } catch (error) {
+      await message(`Failed to inspect branch: ${error}`, {
+        title: "Delete Branch",
+        kind: "error",
+      });
+    }
+  };
+
+  const handleConfirmDeleteBranch = async (options: {
+    deleteLocal: boolean;
+    remotesToDelete: string[];
+  }) => {
+    if (!deleteBranchTarget) return;
+    const { branch } = deleteBranchTarget;
+    try {
+      if (options.deleteLocal) {
+        await invoke("delete_local_branch", {
+          path: repoPath,
+          branchName: branch,
+        });
+      }
+      for (const remoteName of options.remotesToDelete) {
+        await invoke("delete_remote_branch", {
+          path: repoPath,
+          remoteName,
+          branchName: branch,
+        });
+      }
+      if (
+        selectedBranch === branch ||
+        options.remotesToDelete.some(
+          (remoteName) => selectedBranch === `${remoteName}/${branch}`
+        )
+      ) {
+        setSelectedBranch(null);
+      }
+      await loadBranches();
+      await loadRemotes();
+      for (const remoteName of options.remotesToDelete) {
+        await loadRemoteBranches(remoteName);
+      }
+      showStatus(`Deleted branch "${branch}"`);
+    } catch (error) {
+      await message(`Failed to delete branch: ${error}`, {
+        title: "Delete Branch",
+        kind: "error",
+      });
+    } finally {
+      setDeleteBranchTarget(null);
     }
   };
 
@@ -381,7 +450,7 @@ function RepoView({ repoPath }: RepoViewProps) {
           <div className="sidebar-content">
             <div className="sidebar-section">
               <div
-                className="section-item"
+                className={`section-item ${currentView === "stage" ? "selected" : ""}`}
                 onClick={() => setCurrentView("stage")}
               >
                 <span className="item-icon">📝</span>
@@ -402,7 +471,9 @@ function RepoView({ repoPath }: RepoViewProps) {
                 <div className="section-body">
                   <BranchTree
                     branches={branches}
-                    selectedBranch={selectedBranch}
+                    selectedBranch={
+                      currentView === "stage" ? null : selectedBranch
+                    }
                     onSelectBranch={(branch) => {
                       setSelectedBranch(branch);
                       setCurrentView(null);
@@ -412,6 +483,7 @@ function RepoView({ repoPath }: RepoViewProps) {
                     onCreateTag={handleCreateTag}
                     onFetch={handleFetch}
                     onPull={handlePull}
+                    onDeleteBranch={handleDeleteBranch}
                     remotes={remotes}
                   />
                 </div>
@@ -448,11 +520,15 @@ function RepoView({ repoPath }: RepoViewProps) {
                               name: name,
                               is_head: false,
                             }))}
-                            selectedBranch={selectedBranch}
+                            selectedBranch={
+                              currentView === "stage" ? null : selectedBranch
+                            }
                             onSelectBranch={(branch) => {
                               setSelectedBranch(`${remote.name}/${branch}`);
                               setCurrentView(null);
                             }}
+                            onDeleteBranch={handleDeleteBranch}
+                            remoteName={remote.name}
                             level={1}
                             prefix={`remote-${remote.name}`}
                           />
@@ -901,6 +977,14 @@ function RepoView({ repoPath }: RepoViewProps) {
         <div className="status-bar">
           <span>{statusMessage}</span>
         </div>
+      )}
+      {deleteBranchTarget && (
+        <DeleteBranchDialog
+          branchName={deleteBranchTarget.branch}
+          info={deleteBranchTarget.info}
+          onConfirm={handleConfirmDeleteBranch}
+          onCancel={() => setDeleteBranchTarget(null)}
+        />
       )}
     </div>
   );

@@ -612,6 +612,93 @@ pub fn discard_hunk(
     Ok(())
 }
 
+#[derive(Serialize)]
+pub struct BranchDeleteInfo {
+    pub has_local: bool,
+    pub remote_names: Vec<String>,
+}
+
+pub fn get_branch_delete_info(
+    repo: &Repository,
+    branch_name: &str,
+    remote_context: Option<&str>,
+) -> Result<BranchDeleteInfo, git2::Error> {
+    // Invoked from a specific remote's branch list: existence of that remote
+    // ref is a given, we only need to check for a same-named local branch.
+    if let Some(remote) = remote_context {
+        let has_local = repo
+            .find_branch(branch_name, git2::BranchType::Local)
+            .is_ok();
+        return Ok(BranchDeleteInfo {
+            has_local,
+            remote_names: vec![remote.to_string()],
+        });
+    }
+
+    // Invoked from the local branches list. A branch can be pushed to (and
+    // exist on) more than one remote even though git only tracks a single
+    // upstream, so check every configured remote rather than just upstream().
+    repo.find_branch(branch_name, git2::BranchType::Local)?;
+
+    let mut remote_names = Vec::new();
+    for remote in repo.remotes()?.iter().flatten() {
+        let remote_branch = format!("{}/{}", remote, branch_name);
+        if repo
+            .find_branch(&remote_branch, git2::BranchType::Remote)
+            .is_ok()
+        {
+            remote_names.push(remote.to_string());
+        }
+    }
+
+    Ok(BranchDeleteInfo {
+        has_local: true,
+        remote_names,
+    })
+}
+
+pub fn delete_local_branch(repo: &Repository, branch_name: &str) -> Result<(), git2::Error> {
+    let workdir = repo
+        .workdir()
+        .ok_or_else(|| git2::Error::from_str("No working directory"))?;
+
+    let output = std::process::Command::new("git")
+        .args(["branch", "-D", branch_name])
+        .current_dir(workdir)
+        .output()
+        .map_err(|e| git2::Error::from_str(&format!("Failed to run git branch -D: {}", e)))?;
+
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        return Err(git2::Error::from_str(stderr.as_ref()));
+    }
+
+    Ok(())
+}
+
+pub fn delete_remote_branch(
+    repo: &Repository,
+    remote_name: &str,
+    branch_name: &str,
+) -> Result<(), git2::Error> {
+    let workdir = repo
+        .workdir()
+        .ok_or_else(|| git2::Error::from_str("No working directory"))?;
+
+    let output = std::process::Command::new("git")
+        .args(["push", remote_name, "--delete", branch_name])
+        .current_dir(workdir)
+        .output()
+        .map_err(|e| git2::Error::from_str(&format!("Failed to run git push --delete: {}", e)))?;
+
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        return Err(git2::Error::from_str(stderr.as_ref()));
+    }
+
+    Ok(())
+}
+
 pub fn checkout_branch(repo: &Repository, branch_name: &str) -> Result<(), git2::Error> {
     let workdir = repo.workdir().unwrap();
 

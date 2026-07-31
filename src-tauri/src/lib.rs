@@ -213,6 +213,33 @@ fn checkout_branch(path: String, branch_name: String) -> Result<(), String> {
 }
 
 #[tauri::command]
+fn get_branch_delete_info(
+    path: String,
+    branch_name: String,
+    remote_context: Option<String>,
+) -> Result<git_ops::BranchDeleteInfo, String> {
+    let repo = git_ops::open_repository(&path).map_err(|e| e.to_string())?;
+    git_ops::get_branch_delete_info(&repo, &branch_name, remote_context.as_deref())
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn delete_local_branch(path: String, branch_name: String) -> Result<(), String> {
+    let repo = git_ops::open_repository(&path).map_err(|e| e.to_string())?;
+    git_ops::delete_local_branch(&repo, &branch_name).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn delete_remote_branch(
+    path: String,
+    remote_name: String,
+    branch_name: String,
+) -> Result<(), String> {
+    let repo = git_ops::open_repository(&path).map_err(|e| e.to_string())?;
+    git_ops::delete_remote_branch(&repo, &remote_name, &branch_name).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
 async fn fetch_remote(path: String, remote_name: String) -> Result<(), String> {
     tokio::task::spawn_blocking(move || {
         let repo = git_ops::open_repository(&path).map_err(|e| e.to_string())?;
@@ -364,6 +391,9 @@ pub fn run() {
             discard_hunk,
             ignore_file,
             checkout_branch,
+            get_branch_delete_info,
+            delete_local_branch,
+            delete_remote_branch,
             fetch_remote,
             pull_remote,
             get_commits,

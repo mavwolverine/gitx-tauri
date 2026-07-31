@@ -182,6 +182,47 @@ export function CommitHistory({
     }
   }, [jumpTarget, onCommitSelect]);
 
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key !== "ArrowUp" && e.key !== "ArrowDown") return;
+
+      const target = e.target as HTMLElement;
+      if (
+        target.tagName === "INPUT" ||
+        target.tagName === "TEXTAREA" ||
+        target.isContentEditable
+      ) {
+        return;
+      }
+
+      const commit = selectedCommitRef.current;
+      if (!commit) return;
+
+      const list =
+        commitsRef.current[
+          branchFilterRef.current as keyof typeof commitsRef.current
+        ] || [];
+      const idx = list.findIndex((c) => c.id === commit.id);
+      if (idx === -1) return;
+
+      const nextIdx = e.key === "ArrowUp" ? idx - 1 : idx + 1;
+      if (nextIdx < 0 || nextIdx >= list.length) return;
+
+      e.preventDefault();
+      const next = list[nextIdx];
+      setSelectedCommit(next);
+      onCommitSelect(next);
+      setTimeout(() => {
+        const element = document.querySelector(`[data-commit-id="${next.id}"]`);
+        if (element)
+          element.scrollIntoView({ behavior: "smooth", block: "center" });
+      }, 0);
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [onCommitSelect]);
+
   const handleGraphResize = (e: React.MouseEvent) => {
     const startX = e.clientX;
     const startWidth = graphWidth;

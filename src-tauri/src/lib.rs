@@ -207,6 +207,12 @@ fn ignore_file(path: String, file_path: String) -> Result<(), String> {
 }
 
 #[tauri::command]
+fn create_commit(path: String, message: String, amend: bool) -> Result<String, String> {
+    let repo = git_ops::open_repository(&path).map_err(|e| e.to_string())?;
+    git_ops::create_commit(&repo, &message, amend).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
 fn checkout_branch(path: String, branch_name: String) -> Result<(), String> {
     let repo = git_ops::open_repository(&path).map_err(|e| e.to_string())?;
     git_ops::checkout_branch(&repo, &branch_name).map_err(|e| e.to_string())
@@ -390,6 +396,7 @@ pub fn run() {
             discard_file,
             discard_hunk,
             ignore_file,
+            create_commit,
             checkout_branch,
             get_branch_delete_info,
             delete_local_branch,

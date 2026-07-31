@@ -246,6 +246,24 @@ export function StageView({ repoPath }: StageViewProps) {
     }
   };
 
+  const handleCommit = async () => {
+    try {
+      await invoke("create_commit", {
+        path: repoPath,
+        message: commitMessage,
+        amend,
+      });
+      setCommitMessage("");
+      setAmend(false);
+      loadStatus();
+    } catch (error) {
+      await message(`Failed to commit: ${error}`, {
+        title: "Commit Error",
+        kind: "error",
+      });
+    }
+  };
+
   const getStatusColor = (status: string) => {
     const s = status[0].toUpperCase();
     if (s === "M") return "#4ade80";
@@ -324,6 +342,7 @@ export function StageView({ repoPath }: StageViewProps) {
                 disabled={
                   stagedFiles.length === 0 || commitMessage.trim() === ""
                 }
+                onClick={handleCommit}
               >
                 Commit
               </button>

@@ -612,6 +612,35 @@ pub fn discard_hunk(
     Ok(())
 }
 
+pub fn create_commit(repo: &Repository, message: &str, amend: bool) -> Result<String, git2::Error> {
+    let mut index = repo.index()?;
+    let tree_id = index.write_tree()?;
+    let tree = repo.find_tree(tree_id)?;
+    let signature = repo.signature()?;
+
+    if amend {
+        let head = repo.head()?;
+        let head_commit = head.peel_to_commit()?;
+        let new_oid = head_commit.amend(
+            Some("HEAD"),
+            Some(&signature),
+            Some(&signature),
+            None,
+            Some(message),
+            Some(&tree),
+        )?;
+        Ok(new_oid.to_string())
+    } else {
+        let parent_commit = match repo.head() {
+            Ok(head) => Some(head.peel_to_commit()?),
+            Err(_) => None,
+        };
+        let parents: Vec<&git2::Commit> = parent_commit.iter().collect();
+        let oid = repo.commit(Some("HEAD"), &signature, &signature, message, &tree, &parents)?;
+        Ok(oid.to_string())
+    }
+}
+
 #[derive(Serialize)]
 pub struct BranchDeleteInfo {
     pub has_local: bool,

@@ -772,6 +772,24 @@ pub fn delete_remote_branch(
     Ok(())
 }
 
+pub fn create_branch(
+    repo: &Repository,
+    branch_name: &str,
+    from_branch: &str,
+) -> Result<(), git2::Error> {
+    let target_commit = if let Ok(branch) = repo.find_branch(from_branch, git2::BranchType::Local)
+    {
+        branch.get().peel_to_commit()?
+    } else if let Ok(branch) = repo.find_branch(from_branch, git2::BranchType::Remote) {
+        branch.get().peel_to_commit()?
+    } else {
+        repo.revparse_single(from_branch)?.peel_to_commit()?
+    };
+
+    repo.branch(branch_name, &target_commit, false)?;
+    Ok(())
+}
+
 pub fn checkout_branch(repo: &Repository, branch_name: &str) -> Result<(), git2::Error> {
     let workdir = repo.workdir().unwrap();
 

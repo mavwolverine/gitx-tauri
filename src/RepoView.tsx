@@ -12,6 +12,7 @@ import {
   DeleteBranchDialog,
   BranchDeleteInfo,
 } from "./components/DeleteBranchDialog";
+import { CreateBranchDialog } from "./components/CreateBranchDialog";
 import "./RepoView.css";
 
 interface RepoViewProps {
@@ -91,6 +92,7 @@ function RepoView({ repoPath }: RepoViewProps) {
     remoteContext?: string;
     info: BranchDeleteInfo;
   } | null>(null);
+  const [createBranchFrom, setCreateBranchFrom] = useState<string | null>(null);
   const selectedCommitRef = useRef(selectedCommit);
   selectedCommitRef.current = selectedCommit;
 
@@ -273,11 +275,34 @@ function RepoView({ repoPath }: RepoViewProps) {
     }
   };
 
-  const handleCreateBranch = async () => {
-    await message("Coming soon", {
-      title: "Create Branch",
-      kind: "info",
-    });
+  const handleCreateBranch = async (fromBranch: string) => {
+    setCreateBranchFrom(fromBranch);
+  };
+
+  const handleConfirmCreateBranch = async (
+    branchName: string,
+    checkout: boolean
+  ) => {
+    if (!createBranchFrom) return;
+    try {
+      await invoke("create_branch", {
+        path: repoPath,
+        branchName,
+        fromBranch: createBranchFrom,
+      });
+      if (checkout) {
+        await invoke("checkout_branch", { path: repoPath, branchName });
+      }
+      await loadBranches();
+      showStatus(`Created branch "${branchName}"`);
+    } catch (error) {
+      await message(`Failed to create branch: ${error}`, {
+        title: "Create Branch Error",
+        kind: "error",
+      });
+    } finally {
+      setCreateBranchFrom(null);
+    }
   };
 
   const handleCreateTag = async () => {
@@ -1005,6 +1030,13 @@ function RepoView({ repoPath }: RepoViewProps) {
           info={deleteBranchTarget.info}
           onConfirm={handleConfirmDeleteBranch}
           onCancel={() => setDeleteBranchTarget(null)}
+        />
+      )}
+      {createBranchFrom && (
+        <CreateBranchDialog
+          fromBranch={createBranchFrom}
+          onConfirm={handleConfirmCreateBranch}
+          onCancel={() => setCreateBranchFrom(null)}
         />
       )}
     </div>

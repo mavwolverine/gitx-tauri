@@ -15,6 +15,9 @@ export function CreateBranchDialog({
   const [name, setName] = useState("");
   const [checkout, setCheckout] = useState(true);
   const trimmed = name.trim();
+  const displayFrom = /^[0-9a-f]{40}$/i.test(fromBranch)
+    ? fromBranch.substring(0, 7)
+    : fromBranch;
 
   const submit = () => {
     if (trimmed) onConfirm(trimmed, checkout);
@@ -24,7 +27,7 @@ export function CreateBranchDialog({
     <div className="dialog-overlay" onClick={onCancel}>
       <div className="dialog-box" onClick={(e) => e.stopPropagation()}>
         <div className="dialog-title">Create Branch</div>
-        <div className="dialog-message">From &quot;{fromBranch}&quot;</div>
+        <div className="dialog-message">From &quot;{displayFrom}&quot;</div>
         <input
           className="dialog-input"
           type="text"

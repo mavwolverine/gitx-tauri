@@ -10,6 +10,7 @@ interface CommitHistoryProps {
   jumpTarget?: { id: string; nonce: number } | null;
   commitViewMode: "detail" | "tree";
   onCommitViewModeChange: (mode: "detail" | "tree") => void;
+  onCreateBranch?: (fromCommit: string) => void;
 }
 
 interface GitAuthor {
@@ -50,6 +51,7 @@ export function CommitHistory({
   jumpTarget,
   commitViewMode,
   onCommitViewModeChange,
+  onCreateBranch,
 }: CommitHistoryProps) {
   const [commits, setCommits] = useState<{
     All: GitCommit[];
@@ -61,12 +63,23 @@ export function CommitHistory({
   const [graphWidth, setGraphWidth] = useState(60);
   const [messageWidth, setMessageWidth] = useState(400);
   const [branchFilter, setBranchFilter] = useState<string>("All");
+  const [rowContextMenu, setRowContextMenu] = useState<{
+    x: number;
+    y: number;
+    commitId: string;
+  } | null>(null);
   const selectedCommitRef = useRef(selectedCommit);
   selectedCommitRef.current = selectedCommit;
   const commitsRef = useRef(commits);
   commitsRef.current = commits;
   const branchFilterRef = useRef(branchFilter);
   branchFilterRef.current = branchFilter;
+
+  useEffect(() => {
+    const handleClick = () => setRowContextMenu(null);
+    window.addEventListener("click", handleClick);
+    return () => window.removeEventListener("click", handleClick);
+  }, []);
 
   const loadAllCommits = useCallback(async () => {
     try {
@@ -401,6 +414,14 @@ export function CommitHistory({
                       selectedCommit?.id === commit.id ? "selected" : ""
                     }
                     onClick={() => handleCommitClick(commit)}
+                    onContextMenu={(e) => {
+                      e.preventDefault();
+                      setRowContextMenu({
+                        x: e.clientX,
+                        y: e.clientY,
+                        commitId: commit.id,
+                      });
+                    }}
                   >
                     <td className="sha">{commit.id.substring(0, 7)}</td>
                     <td className="graph">
@@ -463,6 +484,22 @@ export function CommitHistory({
           </tbody>
         </table>
       </div>
+      {rowContextMenu && onCreateBranch && (
+        <div
+          className="context-menu"
+          style={{ left: rowContextMenu.x, top: rowContextMenu.y }}
+        >
+          <div
+            className="context-menu-item"
+            onClick={() => {
+              onCreateBranch(rowContextMenu.commitId);
+              setRowContextMenu(null);
+            }}
+          >
+            Create Branch...
+          </div>
+        </div>
+      )}
     </div>
   );
 }

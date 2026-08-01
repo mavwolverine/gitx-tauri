@@ -692,6 +692,7 @@ function RepoView({ repoPath }: RepoViewProps) {
                     jumpTarget={jumpTarget}
                     commitViewMode={commitViewMode}
                     onCommitViewModeChange={setCommitViewMode}
+                    onCreateBranch={handleCreateBranch}
                   />
                 </div>
               </Panel>

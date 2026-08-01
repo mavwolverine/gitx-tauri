@@ -1,0 +1,19 @@
+.dialog-textarea {
+  width: 100%;
+  box-sizing: border-box;
+  background: #1e1e1e;
+  border: 1px solid #444;
+  color: #e0e0e0;
+  padding: 6px 8px;
+  font-size: 12px;
+  border-radius: 4px;
+  margin-bottom: 16px;
+  min-height: 60px;
+  resize: vertical;
+  font-family: inherit;
+}
+
+.dialog-textarea:focus {
+  outline: none;
+  border-color: #007acc;
+}

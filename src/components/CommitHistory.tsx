@@ -11,6 +11,7 @@ interface CommitHistoryProps {
   commitViewMode: "detail" | "tree";
   onCommitViewModeChange: (mode: "detail" | "tree") => void;
   onCreateBranch?: (fromCommit: string) => void;
+  onCreateTag?: (fromCommit: string) => void;
 }
 
 interface GitAuthor {
@@ -52,6 +53,7 @@ export function CommitHistory({
   commitViewMode,
   onCommitViewModeChange,
   onCreateBranch,
+  onCreateTag,
 }: CommitHistoryProps) {
   const [commits, setCommits] = useState<{
     All: GitCommit[];
@@ -484,20 +486,33 @@ export function CommitHistory({
           </tbody>
         </table>
       </div>
-      {rowContextMenu && onCreateBranch && (
+      {rowContextMenu && (onCreateBranch || onCreateTag) && (
         <div
           className="context-menu"
           style={{ left: rowContextMenu.x, top: rowContextMenu.y }}
         >
-          <div
-            className="context-menu-item"
-            onClick={() => {
-              onCreateBranch(rowContextMenu.commitId);
-              setRowContextMenu(null);
-            }}
-          >
-            Create Branch...
-          </div>
+          {onCreateBranch && (
+            <div
+              className="context-menu-item"
+              onClick={() => {
+                onCreateBranch(rowContextMenu.commitId);
+                setRowContextMenu(null);
+              }}
+            >
+              Create Branch...
+            </div>
+          )}
+          {onCreateTag && (
+            <div
+              className="context-menu-item"
+              onClick={() => {
+                onCreateTag(rowContextMenu.commitId);
+                setRowContextMenu(null);
+              }}
+            >
+              Create Tag...
+            </div>
+          )}
         </div>
       )}
     </div>

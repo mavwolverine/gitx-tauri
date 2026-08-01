@@ -219,6 +219,18 @@ fn create_branch(path: String, branch_name: String, from_branch: String) -> Resu
 }
 
 #[tauri::command]
+fn create_tag(
+    path: String,
+    tag_name: String,
+    from_ref: String,
+    message: Option<String>,
+) -> Result<(), String> {
+    let repo = git_ops::open_repository(&path).map_err(|e| e.to_string())?;
+    git_ops::create_tag(&repo, &tag_name, &from_ref, message.as_deref())
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
 fn checkout_branch(path: String, branch_name: String) -> Result<(), String> {
     let repo = git_ops::open_repository(&path).map_err(|e| e.to_string())?;
     git_ops::checkout_branch(&repo, &branch_name).map_err(|e| e.to_string())
@@ -414,6 +426,7 @@ pub fn run() {
             ignore_file,
             create_commit,
             create_branch,
+            create_tag,
             checkout_branch,
             get_branch_delete_info,
             delete_local_branch,

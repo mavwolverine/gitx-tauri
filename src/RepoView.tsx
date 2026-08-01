@@ -13,6 +13,7 @@ import {
   BranchDeleteInfo,
 } from "./components/DeleteBranchDialog";
 import { CreateBranchDialog } from "./components/CreateBranchDialog";
+import { CreateTagDialog } from "./components/CreateTagDialog";
 import "./RepoView.css";
 
 interface RepoViewProps {
@@ -93,6 +94,7 @@ function RepoView({ repoPath }: RepoViewProps) {
     info: BranchDeleteInfo;
   } | null>(null);
   const [createBranchFrom, setCreateBranchFrom] = useState<string | null>(null);
+  const [createTagFrom, setCreateTagFrom] = useState<string | null>(null);
   const selectedCommitRef = useRef(selectedCommit);
   selectedCommitRef.current = selectedCommit;
 
@@ -305,11 +307,32 @@ function RepoView({ repoPath }: RepoViewProps) {
     }
   };
 
-  const handleCreateTag = async () => {
-    await message("Coming soon", {
-      title: "Create Tag",
-      kind: "info",
-    });
+  const handleCreateTag = async (fromRef: string) => {
+    setCreateTagFrom(fromRef);
+  };
+
+  const handleConfirmCreateTag = async (
+    tagName: string,
+    tagMessage: string
+  ) => {
+    if (!createTagFrom) return;
+    try {
+      await invoke("create_tag", {
+        path: repoPath,
+        tagName,
+        fromRef: createTagFrom,
+        message: tagMessage || null,
+      });
+      await loadTags();
+      showStatus(`Created tag "${tagName}"`);
+    } catch (error) {
+      await message(`Failed to create tag: ${error}`, {
+        title: "Create Tag Error",
+        kind: "error",
+      });
+    } finally {
+      setCreateTagFrom(null);
+    }
   };
 
   const handleFetch = async (_branch: string, remote: string) => {
@@ -693,6 +716,7 @@ function RepoView({ repoPath }: RepoViewProps) {
                     commitViewMode={commitViewMode}
                     onCommitViewModeChange={setCommitViewMode}
                     onCreateBranch={handleCreateBranch}
+                    onCreateTag={handleCreateTag}
                   />
                 </div>
               </Panel>
@@ -1038,6 +1062,13 @@ function RepoView({ repoPath }: RepoViewProps) {
           fromBranch={createBranchFrom}
           onConfirm={handleConfirmCreateBranch}
           onCancel={() => setCreateBranchFrom(null)}
+        />
+      )}
+      {createTagFrom && (
+        <CreateTagDialog
+          fromRef={createTagFrom}
+          onConfirm={handleConfirmCreateTag}
+          onCancel={() => setCreateTagFrom(null)}
         />
       )}
     </div>

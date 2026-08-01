@@ -772,21 +772,47 @@ pub fn delete_remote_branch(
     Ok(())
 }
 
+fn resolve_commit_from_ref<'repo>(
+    repo: &'repo Repository,
+    reference: &str,
+) -> Result<git2::Commit<'repo>, git2::Error> {
+    if let Ok(branch) = repo.find_branch(reference, git2::BranchType::Local) {
+        return branch.get().peel_to_commit();
+    }
+    if let Ok(branch) = repo.find_branch(reference, git2::BranchType::Remote) {
+        return branch.get().peel_to_commit();
+    }
+    repo.revparse_single(reference)?.peel_to_commit()
+}
+
 pub fn create_branch(
     repo: &Repository,
     branch_name: &str,
     from_branch: &str,
 ) -> Result<(), git2::Error> {
-    let target_commit = if let Ok(branch) = repo.find_branch(from_branch, git2::BranchType::Local)
-    {
-        branch.get().peel_to_commit()?
-    } else if let Ok(branch) = repo.find_branch(from_branch, git2::BranchType::Remote) {
-        branch.get().peel_to_commit()?
-    } else {
-        repo.revparse_single(from_branch)?.peel_to_commit()?
-    };
-
+    let target_commit = resolve_commit_from_ref(repo, from_branch)?;
     repo.branch(branch_name, &target_commit, false)?;
+    Ok(())
+}
+
+pub fn create_tag(
+    repo: &Repository,
+    tag_name: &str,
+    from_ref: &str,
+    message: Option<&str>,
+) -> Result<(), git2::Error> {
+    let target_commit = resolve_commit_from_ref(repo, from_ref)?;
+
+    match message {
+        Some(msg) if !msg.trim().is_empty() => {
+            let signature = resolve_author_signature(repo)?;
+            repo.tag(tag_name, target_commit.as_object(), &signature, msg, false)?;
+        }
+        _ => {
+            repo.tag_lightweight(tag_name, target_commit.as_object(), false)?;
+        }
+    }
+
     Ok(())
 }
 

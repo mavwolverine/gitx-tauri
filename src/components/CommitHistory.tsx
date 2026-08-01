@@ -12,6 +12,7 @@ interface CommitHistoryProps {
   onCommitViewModeChange: (mode: "detail" | "tree") => void;
   onCreateBranch?: (fromCommit: string) => void;
   onCreateTag?: (fromCommit: string) => void;
+  onDeleteTag?: (tagName: string) => void;
 }
 
 interface GitAuthor {
@@ -54,6 +55,7 @@ export function CommitHistory({
   onCommitViewModeChange,
   onCreateBranch,
   onCreateTag,
+  onDeleteTag,
 }: CommitHistoryProps) {
   const [commits, setCommits] = useState<{
     All: GitCommit[];
@@ -70,6 +72,11 @@ export function CommitHistory({
     y: number;
     commitId: string;
   } | null>(null);
+  const [tagBadgeContextMenu, setTagBadgeContextMenu] = useState<{
+    x: number;
+    y: number;
+    tag: string;
+  } | null>(null);
   const selectedCommitRef = useRef(selectedCommit);
   selectedCommitRef.current = selectedCommit;
   const commitsRef = useRef(commits);
@@ -78,7 +85,10 @@ export function CommitHistory({
   branchFilterRef.current = branchFilter;
 
   useEffect(() => {
-    const handleClick = () => setRowContextMenu(null);
+    const handleClick = () => {
+      setRowContextMenu(null);
+      setTagBadgeContextMenu(null);
+    };
     window.addEventListener("click", handleClick);
     return () => window.removeEventListener("click", handleClick);
   }, []);
@@ -469,7 +479,23 @@ export function CommitHistory({
                         })}
                       {commit.tags &&
                         commit.tags.map((tag) => (
-                          <span key={tag} className="tag-badge">
+                          <span
+                            key={tag}
+                            className="tag-badge"
+                            onContextMenu={
+                              onDeleteTag
+                                ? (e) => {
+                                    e.preventDefault();
+                                    e.stopPropagation();
+                                    setTagBadgeContextMenu({
+                                      x: e.clientX,
+                                      y: e.clientY,
+                                      tag,
+                                    });
+                                  }
+                                : undefined
+                            }
+                          >
                             {tag}
                           </span>
                         ))}
@@ -513,6 +539,22 @@ export function CommitHistory({
               Create Tag...
             </div>
           )}
+        </div>
+      )}
+      {tagBadgeContextMenu && onDeleteTag && (
+        <div
+          className="context-menu"
+          style={{ left: tagBadgeContextMenu.x, top: tagBadgeContextMenu.y }}
+        >
+          <div
+            className="context-menu-item"
+            onClick={() => {
+              onDeleteTag(tagBadgeContextMenu.tag);
+              setTagBadgeContextMenu(null);
+            }}
+          >
+            Delete Tag...
+          </div>
         </div>
       )}
     </div>

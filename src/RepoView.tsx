@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
-import { message } from "@tauri-apps/plugin-dialog";
+import { message, confirm } from "@tauri-apps/plugin-dialog";
 import { Panel, Group, Separator } from "react-resizable-panels";
 import { BranchTree } from "./components/BranchTree";
 import { StageView } from "./components/StageView";
@@ -95,8 +95,19 @@ function RepoView({ repoPath }: RepoViewProps) {
   } | null>(null);
   const [createBranchFrom, setCreateBranchFrom] = useState<string | null>(null);
   const [createTagFrom, setCreateTagFrom] = useState<string | null>(null);
+  const [tagContextMenu, setTagContextMenu] = useState<{
+    x: number;
+    y: number;
+    tag: string;
+  } | null>(null);
   const selectedCommitRef = useRef(selectedCommit);
   selectedCommitRef.current = selectedCommit;
+
+  useEffect(() => {
+    const handleClick = () => setTagContextMenu(null);
+    window.addEventListener("click", handleClick);
+    return () => window.removeEventListener("click", handleClick);
+  }, []);
 
   const showStatus = (message: string, duration = 3000) => {
     setStatusMessage(message);
@@ -332,6 +343,24 @@ function RepoView({ repoPath }: RepoViewProps) {
       });
     } finally {
       setCreateTagFrom(null);
+    }
+  };
+
+  const handleDeleteTag = async (tagName: string) => {
+    const confirmed = await confirm(`Delete tag "${tagName}"?`, {
+      title: "Delete Tag",
+      kind: "warning",
+    });
+    if (!confirmed) return;
+    try {
+      await invoke("delete_tag", { path: repoPath, tagName });
+      await loadTags();
+      showStatus(`Deleted tag "${tagName}"`);
+    } catch (error) {
+      await message(`Failed to delete tag: ${error}`, {
+        title: "Delete Tag Error",
+        kind: "error",
+      });
     }
   };
 
@@ -653,6 +682,10 @@ function RepoView({ repoPath }: RepoViewProps) {
                           console.error("Failed to load tag commit:", error);
                         }
                       }}
+                      onContextMenu={(e) => {
+                        e.preventDefault();
+                        setTagContextMenu({ x: e.clientX, y: e.clientY, tag });
+                      }}
                     >
                       <span
                         className="folder-icon"
@@ -717,6 +750,7 @@ function RepoView({ repoPath }: RepoViewProps) {
                     onCommitViewModeChange={setCommitViewMode}
                     onCreateBranch={handleCreateBranch}
                     onCreateTag={handleCreateTag}
+                    onDeleteTag={handleDeleteTag}
                   />
                 </div>
               </Panel>
@@ -1070,6 +1104,22 @@ function RepoView({ repoPath }: RepoViewProps) {
           onConfirm={handleConfirmCreateTag}
           onCancel={() => setCreateTagFrom(null)}
         />
+      )}
+      {tagContextMenu && (
+        <div
+          className="context-menu"
+          style={{ left: tagContextMenu.x, top: tagContextMenu.y }}
+        >
+          <div
+            className="context-menu-item"
+            onClick={() => {
+              handleDeleteTag(tagContextMenu.tag);
+              setTagContextMenu(null);
+            }}
+          >
+            Delete Tag...
+          </div>
+        </div>
       )}
     </div>
   );

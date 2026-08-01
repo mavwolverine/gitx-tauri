@@ -226,8 +226,13 @@ fn create_tag(
     message: Option<String>,
 ) -> Result<(), String> {
     let repo = git_ops::open_repository(&path).map_err(|e| e.to_string())?;
-    git_ops::create_tag(&repo, &tag_name, &from_ref, message.as_deref())
-        .map_err(|e| e.to_string())
+    git_ops::create_tag(&repo, &tag_name, &from_ref, message.as_deref()).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn delete_tag(path: String, tag_name: String) -> Result<(), String> {
+    let repo = git_ops::open_repository(&path).map_err(|e| e.to_string())?;
+    git_ops::delete_tag(&repo, &tag_name).map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -427,6 +432,7 @@ pub fn run() {
             create_commit,
             create_branch,
             create_tag,
+            delete_tag,
             checkout_branch,
             get_branch_delete_info,
             delete_local_branch,

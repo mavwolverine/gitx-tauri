@@ -816,6 +816,10 @@ pub fn create_tag(
     Ok(())
 }
 
+pub fn delete_tag(repo: &Repository, tag_name: &str) -> Result<(), git2::Error> {
+    repo.tag_delete(tag_name)
+}
+
 pub fn checkout_branch(repo: &Repository, branch_name: &str) -> Result<(), git2::Error> {
     let workdir = repo.workdir().unwrap();
 

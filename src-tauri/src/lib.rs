@@ -266,6 +266,16 @@ async fn pull_remote(path: String, remote_name: String) -> Result<(), String> {
 }
 
 #[tauri::command]
+async fn push_remote(path: String, remote_name: String, branch_name: String) -> Result<(), String> {
+    tokio::task::spawn_blocking(move || {
+        let repo = git_ops::open_repository(&path).map_err(|e| e.to_string())?;
+        git_ops::push_remote(&repo, &remote_name, &branch_name).map_err(|e| e.to_string())
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
+#[tauri::command]
 fn get_commits(
     path: String,
     limit: usize,
@@ -403,6 +413,7 @@ pub fn run() {
             delete_remote_branch,
             fetch_remote,
             pull_remote,
+            push_remote,
             get_commits,
             get_branch_head,
             get_commit_diff,

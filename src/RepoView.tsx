@@ -319,6 +319,26 @@ function RepoView({ repoPath }: RepoViewProps) {
     }
   };
 
+  const handlePush = async (branchName: string, remoteName: string) => {
+    try {
+      showStatus(`Pushing to ${remoteName}...`, 0);
+      await invoke("push_remote", {
+        path: repoPath,
+        remoteName,
+        branchName,
+      });
+      await loadBranches();
+      await loadRemotes();
+      showStatus(`Push to ${remoteName} complete`);
+    } catch (error) {
+      showStatus("");
+      await message(`Failed to push to ${remoteName}: ${error}`, {
+        title: "Push Error",
+        kind: "error",
+      });
+    }
+  };
+
   const openSubmodule = async (submodulePath: string) => {
     try {
       const fullPath = `${repoPath}/${submodulePath}`;
@@ -483,6 +503,7 @@ function RepoView({ repoPath }: RepoViewProps) {
                     onCreateTag={handleCreateTag}
                     onFetch={handleFetch}
                     onPull={handlePull}
+                    onPush={handlePush}
                     onDeleteBranch={handleDeleteBranch}
                     remotes={remotes}
                   />

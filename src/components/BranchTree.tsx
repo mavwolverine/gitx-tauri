@@ -18,6 +18,7 @@ interface BranchTreeProps {
   onCreateTag?: (fromBranch: string) => void;
   onFetch?: (branch: string, remote: string) => void;
   onPull?: (branch: string, remote: string) => void;
+  onPush?: (branch: string, remote: string) => void;
   onDeleteBranch?: (branch: string, remoteContext?: string) => void;
   level?: number;
   prefix?: string;
@@ -34,6 +35,7 @@ export function BranchTree({
   onCreateTag,
   onFetch,
   onPull,
+  onPush,
   onDeleteBranch,
   level = 0,
   prefix = "",
@@ -265,6 +267,43 @@ export function BranchTree({
                 ? `Pull '${contextMenu.remote}' and update '${contextMenu.branch.split("/").pop()}'`
                 : "Pull (no remote)"}
             </div>
+          )}
+          {onPush && contextMenu.remote && (
+            <div
+              className="context-menu-item"
+              onClick={() => {
+                onPush(contextMenu.branch, contextMenu.remote!);
+                setContextMenu(null);
+              }}
+            >
+              Push '{contextMenu.branch.split("/").pop()}' to '
+              {contextMenu.remote}'
+            </div>
+          )}
+          {onPush &&
+            remotes.length > 0 &&
+            !(contextMenu.remote && remotes.length === 1) && (
+              <div className="context-menu-item has-submenu">
+                <span>Push '{contextMenu.branch.split("/").pop()}' to</span>
+                <span className="submenu-arrow">▸</span>
+                <div className="context-submenu">
+                  {remotes.map((remote) => (
+                    <div
+                      key={remote.name}
+                      className="context-menu-item"
+                      onClick={() => {
+                        onPush(contextMenu.branch, remote.name);
+                        setContextMenu(null);
+                      }}
+                    >
+                      {remote.name}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          {onPush && remotes.length === 0 && (
+            <div className="context-menu-item disabled">Push (no remote)</div>
           )}
         </div>
       )}

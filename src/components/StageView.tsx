@@ -327,6 +327,9 @@ export function StageView({ repoPath }: StageViewProps) {
               value={commitMessage}
               onChange={(e) => setCommitMessage(e.target.value)}
               placeholder="Enter commit message..."
+              spellCheck={false}
+              autoCorrect="off"
+              autoCapitalize="off"
             />
             <div className="commit-actions">
               <label className="amend-checkbox">

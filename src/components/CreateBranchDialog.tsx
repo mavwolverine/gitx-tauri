@@ -32,6 +32,10 @@ export function CreateBranchDialog({
           className="dialog-input"
           type="text"
           autoFocus
+          spellCheck={false}
+          autoCorrect="off"
+          autoCapitalize="off"
+          autoComplete="off"
           value={name}
           onChange={(e) => setName(e.target.value)}
           onKeyDown={(e) => {

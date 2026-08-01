@@ -191,6 +191,10 @@ function Launcher() {
                 value={cloneUrl}
                 onChange={(e) => setCloneUrl(e.target.value)}
                 className="clone-input"
+                spellCheck={false}
+                autoCorrect="off"
+                autoCapitalize="off"
+                autoComplete="off"
               />
               <div className="clone-path-row">
                 <input

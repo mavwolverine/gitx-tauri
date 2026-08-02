@@ -78,16 +78,7 @@ _Coming soon_
 
 ## Roadmap
 
-- [ ] Syntax highlighting in diffs
-- [ ] Commit creation and amending
-- [ ] Branch creation and deletion
-- [ ] Push/pull operations
-- [ ] Stash management
-- [ ] Cherry-pick and rebase support
-- [ ] Search functionality
-- [ ] Keyboard shortcuts
-- [ ] Custom themes
-- [ ] Performance optimizations for large repositories
+See [ROADMAP.md](ROADMAP.md) for what's done, what's planned, and priority order.
 
 ## Contributing
 

@@ -236,6 +236,46 @@ fn delete_tag(path: String, tag_name: String) -> Result<(), String> {
 }
 
 #[tauri::command]
+fn save_stash(
+    path: String,
+    message: Option<String>,
+    include_untracked: bool,
+) -> Result<String, String> {
+    let mut repo = git_ops::open_repository(&path).map_err(|e| e.to_string())?;
+    git_ops::save_stash(&mut repo, message.as_deref(), include_untracked).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn get_stashes(path: String) -> Result<Vec<git_ops::GitStash>, String> {
+    let mut repo = git_ops::open_repository(&path).map_err(|e| e.to_string())?;
+    git_ops::get_stashes(&mut repo).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn apply_stash(path: String, index: usize) -> Result<(), String> {
+    let mut repo = git_ops::open_repository(&path).map_err(|e| e.to_string())?;
+    git_ops::apply_stash(&mut repo, index).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn pop_stash(path: String, index: usize) -> Result<(), String> {
+    let mut repo = git_ops::open_repository(&path).map_err(|e| e.to_string())?;
+    git_ops::pop_stash(&mut repo, index).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn drop_stash(path: String, index: usize) -> Result<(), String> {
+    let mut repo = git_ops::open_repository(&path).map_err(|e| e.to_string())?;
+    git_ops::drop_stash(&mut repo, index).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn get_stash_diff(path: String, oid: String) -> Result<Vec<git_ops::CommitFile>, String> {
+    let repo = git_ops::open_repository(&path).map_err(|e| e.to_string())?;
+    git_ops::get_stash_diff(&repo, &oid).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
 fn checkout_branch(path: String, branch_name: String) -> Result<(), String> {
     let repo = git_ops::open_repository(&path).map_err(|e| e.to_string())?;
     git_ops::checkout_branch(&repo, &branch_name).map_err(|e| e.to_string())
@@ -433,6 +473,12 @@ pub fn run() {
             create_branch,
             create_tag,
             delete_tag,
+            save_stash,
+            get_stashes,
+            apply_stash,
+            pop_stash,
+            drop_stash,
+            get_stash_diff,
             checkout_branch,
             get_branch_delete_info,
             delete_local_branch,

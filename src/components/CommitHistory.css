@@ -146,7 +146,8 @@
 .commit-table .branch-badge-local,
 .commit-table .branch-badge-remote,
 .commit-table .branch-badge-local-head,
-.commit-table .tag-badge {
+.commit-table .tag-badge,
+.commit-table .stash-badge {
   margin-right: 6px;
 }
 

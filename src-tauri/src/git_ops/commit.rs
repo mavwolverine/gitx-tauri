@@ -19,6 +19,7 @@ pub struct GitCommit {
     pub parents: Vec<String>,
     pub branches: Option<Vec<GitBranch>>,
     pub tags: Option<Vec<String>>,
+    pub is_stash: bool,
     pub lane: usize,
     pub lines: Vec<GraphLine>,
 }
@@ -146,6 +147,17 @@ pub fn get_commits(
         }
     }
 
+    // Like `git log --graph` (and GitX before it), only the most recent stash
+    // is shown as a graph node — older stashes only live in refs/stash's
+    // reflog, not as a walkable ref, so they're omitted here.
+    let stash_oid = repo
+        .find_reference("refs/stash")
+        .ok()
+        .and_then(|r| r.target());
+    if let Some(oid) = stash_oid {
+        revwalk.push(oid)?;
+    }
+
     revwalk.set_sorting(git2::Sort::TIME | git2::Sort::TOPOLOGICAL)?;
 
     let mut branch_map: std::collections::HashMap<git2::Oid, Vec<GitBranch>> =
@@ -225,6 +237,7 @@ pub fn get_commits(
             parents,
             branches,
             tags,
+            is_stash: Some(oid) == stash_oid,
             lane: 0,
             lines: Vec::new(),
         });
@@ -427,7 +440,15 @@ pub fn get_commit_diff(repo: &Repository, commit_id: &str) -> Result<Vec<CommitF
         None
     };
 
-    let diff = repo.diff_tree_to_tree(parent_tree.as_ref(), Some(&commit_tree), None)?;
+    diff_trees_to_commit_files(repo, parent_tree.as_ref(), &commit_tree)
+}
+
+pub(crate) fn diff_trees_to_commit_files(
+    repo: &Repository,
+    old_tree: Option<&git2::Tree>,
+    new_tree: &git2::Tree,
+) -> Result<Vec<CommitFile>, git2::Error> {
+    let diff = repo.diff_tree_to_tree(old_tree, Some(new_tree), None)?;
 
     let mut files = Vec::new();
 

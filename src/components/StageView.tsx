@@ -13,9 +13,10 @@ interface FileStatus {
 
 interface StageViewProps {
   repoPath: string;
+  onStash?: () => void;
 }
 
-export function StageView({ repoPath }: StageViewProps) {
+export function StageView({ repoPath, onStash }: StageViewProps) {
   const [unstagedFiles, setUnstagedFiles] = useState<FileStatus[]>([]);
   const [stagedFiles, setStagedFiles] = useState<FileStatus[]>([]);
   const [selectedFile, setSelectedFile] = useState<string | null>(null);
@@ -332,23 +333,34 @@ export function StageView({ repoPath }: StageViewProps) {
               autoCapitalize="off"
             />
             <div className="commit-actions">
-              <label className="amend-checkbox">
-                <input
-                  type="checkbox"
-                  checked={amend}
-                  onChange={(e) => setAmend(e.target.checked)}
-                />
-                Amend
-              </label>
               <button
-                className="commit-button"
+                className="stash-button"
                 disabled={
-                  stagedFiles.length === 0 || commitMessage.trim() === ""
+                  stagedFiles.length === 0 && unstagedFiles.length === 0
                 }
-                onClick={handleCommit}
+                onClick={onStash}
               >
-                Commit
+                Stash
               </button>
+              <div className="commit-actions-right">
+                <label className="amend-checkbox">
+                  <input
+                    type="checkbox"
+                    checked={amend}
+                    onChange={(e) => setAmend(e.target.checked)}
+                  />
+                  Amend
+                </label>
+                <button
+                  className="commit-button"
+                  disabled={
+                    stagedFiles.length === 0 || commitMessage.trim() === ""
+                  }
+                  onClick={handleCommit}
+                >
+                  Commit
+                </button>
+              </div>
             </div>
           </div>
         </div>

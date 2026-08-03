@@ -1,0 +1,13 @@
+.stash-diff-box {
+  width: 800px;
+  max-width: 90vw;
+  max-height: 80vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.stash-diff-body {
+  overflow-y: auto;
+  flex: 1;
+  margin-bottom: 12px;
+}

@@ -5,6 +5,7 @@ mod file;
 mod remote;
 mod repo;
 mod stage;
+mod stash;
 mod submodule;
 mod tag;
 
@@ -14,5 +15,6 @@ pub use file::*;
 pub use remote::*;
 pub use repo::*;
 pub use stage::*;
+pub use stash::*;
 pub use submodule::*;
 pub use tag::*;

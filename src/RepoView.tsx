@@ -14,6 +14,8 @@ import {
 } from "./components/DeleteBranchDialog";
 import { CreateBranchDialog } from "./components/CreateBranchDialog";
 import { CreateTagDialog } from "./components/CreateTagDialog";
+import { StashDialog } from "./components/StashDialog";
+import { StashDiffDialog } from "./components/StashDiffDialog";
 import "./RepoView.css";
 
 interface RepoViewProps {
@@ -35,6 +37,13 @@ interface GitSubmodule {
   name: string;
   path: string;
   url: string;
+}
+
+interface GitStash {
+  index: number;
+  oid: string;
+  message: string;
+  timestamp: string;
 }
 
 interface CommitFile {
@@ -70,6 +79,7 @@ function RepoView({ repoPath }: RepoViewProps) {
   const [remotes, setRemotes] = useState<GitRemote[]>([]);
   const [tags, setTags] = useState<string[]>([]);
   const [submodules, setSubmodules] = useState<GitSubmodule[]>([]);
+  const [stashes, setStashes] = useState<GitStash[]>([]);
   const [selectedBranch, setSelectedBranch] = useState<string | null>(null);
   const [selectedCommit, setSelectedCommit] = useState<GitCommit | null>(null);
   const [commitFiles, setCommitFiles] = useState<CommitFile[]>([]);
@@ -100,11 +110,24 @@ function RepoView({ repoPath }: RepoViewProps) {
     y: number;
     tag: string;
   } | null>(null);
+  const [stashDialogOpen, setStashDialogOpen] = useState(false);
+  const [stashDiffTarget, setStashDiffTarget] = useState<{
+    oid: string;
+    message: string;
+  } | null>(null);
+  const [stashContextMenu, setStashContextMenu] = useState<{
+    x: number;
+    y: number;
+    index: number;
+  } | null>(null);
   const selectedCommitRef = useRef(selectedCommit);
   selectedCommitRef.current = selectedCommit;
 
   useEffect(() => {
-    const handleClick = () => setTagContextMenu(null);
+    const handleClick = () => {
+      setTagContextMenu(null);
+      setStashContextMenu(null);
+    };
     window.addEventListener("click", handleClick);
     return () => window.removeEventListener("click", handleClick);
   }, []);
@@ -121,6 +144,7 @@ function RepoView({ repoPath }: RepoViewProps) {
     remotes: false,
     tags: true,
     submodules: false,
+    stashes: false,
   });
   const [remoteCollapsed, setRemoteCollapsed] = useState<{
     [key: string]: boolean;
@@ -169,12 +193,24 @@ function RepoView({ repoPath }: RepoViewProps) {
     }
   }, [repoPath]);
 
+  const loadStashes = useCallback(async () => {
+    try {
+      const stashList = await invoke<GitStash[]>("get_stashes", {
+        path: repoPath,
+      });
+      setStashes(stashList);
+    } catch (error) {
+      console.error("Failed to load stashes:", error);
+    }
+  }, [repoPath]);
+
   useEffect(() => {
     const name = repoPath.split(/[/\\]/).pop() || repoPath;
     setRepoName(name);
     loadBranches();
     loadRemotes();
     loadSubmodules();
+    loadStashes();
 
     // Start watching the repo
     invoke("watch_repo", { repoPath }).catch((error) =>
@@ -186,12 +222,13 @@ function RepoView({ repoPath }: RepoViewProps) {
       loadBranches();
       loadRemotes();
       loadSubmodules();
+      loadStashes();
     });
 
     return () => {
       unlisten.then((fn) => fn());
     };
-  }, [repoPath, loadBranches, loadRemotes, loadSubmodules]);
+  }, [repoPath, loadBranches, loadRemotes, loadSubmodules, loadStashes]);
 
   const loadRemoteBranches = async (remoteName: string) => {
     try {
@@ -359,6 +396,74 @@ function RepoView({ repoPath }: RepoViewProps) {
     } catch (error) {
       await message(`Failed to delete tag: ${error}`, {
         title: "Delete Tag Error",
+        kind: "error",
+      });
+    }
+  };
+
+  const handleSaveStash = async (
+    stashMessage: string | null,
+    includeUntracked: boolean
+  ) => {
+    try {
+      await invoke("save_stash", {
+        path: repoPath,
+        message: stashMessage,
+        includeUntracked,
+      });
+      await loadStashes();
+      showStatus("Stashed changes");
+    } catch (error) {
+      await message(`Failed to stash changes: ${error}`, {
+        title: "Stash Error",
+        kind: "error",
+      });
+    } finally {
+      setStashDialogOpen(false);
+    }
+  };
+
+  const handleApplyStash = async (index: number) => {
+    try {
+      await invoke("apply_stash", { path: repoPath, index });
+      showStatus("Applied stash");
+    } catch (error) {
+      await message(`Failed to apply stash: ${error}`, {
+        title: "Apply Stash Error",
+        kind: "error",
+      });
+    } finally {
+      await loadStashes();
+    }
+  };
+
+  const handlePopStash = async (index: number) => {
+    try {
+      await invoke("pop_stash", { path: repoPath, index });
+      showStatus("Popped stash");
+    } catch (error) {
+      await message(`Failed to pop stash: ${error}`, {
+        title: "Pop Stash Error",
+        kind: "error",
+      });
+    } finally {
+      await loadStashes();
+    }
+  };
+
+  const handleDropStash = async (index: number, stashMessage: string) => {
+    const confirmed = await confirm(`Drop stash "${stashMessage}"?`, {
+      title: "Drop Stash",
+      kind: "warning",
+    });
+    if (!confirmed) return;
+    try {
+      await invoke("drop_stash", { path: repoPath, index });
+      await loadStashes();
+      showStatus("Dropped stash");
+    } catch (error) {
+      await message(`Failed to drop stash: ${error}`, {
+        title: "Drop Stash Error",
         kind: "error",
       });
     }
@@ -732,11 +837,56 @@ function RepoView({ repoPath }: RepoViewProps) {
                 </div>
               )}
             </div>
+            <div className="sidebar-section collapsible">
+              <div
+                className="section-header"
+                onClick={() => toggleSection("stashes")}
+              >
+                <span>Stashes</span>
+                <span className="collapse-icon">
+                  {collapsed.stashes ? "▶" : "▼"}
+                </span>
+              </div>
+              {!collapsed.stashes && (
+                <div className="section-body">
+                  {stashes.map((stash) => (
+                    <div
+                      key={stash.index}
+                      className="branch-item"
+                      style={{ paddingLeft: "16px" }}
+                      onContextMenu={(e) => {
+                        e.preventDefault();
+                        setStashContextMenu({
+                          x: e.clientX,
+                          y: e.clientY,
+                          index: stash.index,
+                        });
+                      }}
+                    >
+                      <span
+                        className="folder-icon"
+                        style={{ visibility: "hidden" }}
+                      >
+                        ▼
+                      </span>
+                      <span className="item-icon">📥</span>
+                      <span className="stash-message">{stash.message}</span>
+                      <span className="stash-date">
+                        {formatDate(stash.timestamp)}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
         </div>
         <div className="main-content">
           {currentView === "stage" ? (
-            <StageView repoPath={repoPath} />
+            <StageView
+              repoPath={repoPath}
+              onStash={() => setStashDialogOpen(true)}
+            />
           ) : selectedBranch ? (
             <Group orientation="vertical">
               <Panel defaultSize={60} minSize={20}>
@@ -751,6 +901,14 @@ function RepoView({ repoPath }: RepoViewProps) {
                     onCreateBranch={handleCreateBranch}
                     onCreateTag={handleCreateTag}
                     onDeleteTag={handleDeleteTag}
+                    onApplyStash={() => handleApplyStash(0)}
+                    onPopStash={() => handlePopStash(0)}
+                    onDropStash={() =>
+                      handleDropStash(
+                        0,
+                        stashes.find((s) => s.index === 0)?.message ?? ""
+                      )
+                    }
                   />
                 </div>
               </Panel>
@@ -1105,6 +1263,20 @@ function RepoView({ repoPath }: RepoViewProps) {
           onCancel={() => setCreateTagFrom(null)}
         />
       )}
+      {stashDialogOpen && (
+        <StashDialog
+          onConfirm={handleSaveStash}
+          onCancel={() => setStashDialogOpen(false)}
+        />
+      )}
+      {stashDiffTarget && (
+        <StashDiffDialog
+          repoPath={repoPath}
+          oid={stashDiffTarget.oid}
+          message={stashDiffTarget.message}
+          onClose={() => setStashDiffTarget(null)}
+        />
+      )}
       {tagContextMenu && (
         <div
           className="context-menu"
@@ -1118,6 +1290,57 @@ function RepoView({ repoPath }: RepoViewProps) {
             }}
           >
             Delete Tag...
+          </div>
+        </div>
+      )}
+      {stashContextMenu && (
+        <div
+          className="context-menu"
+          style={{ left: stashContextMenu.x, top: stashContextMenu.y }}
+        >
+          <div
+            className="context-menu-item"
+            onClick={() => {
+              handlePopStash(stashContextMenu.index);
+              setStashContextMenu(null);
+            }}
+          >
+            Pop Stash
+          </div>
+          <div
+            className="context-menu-item"
+            onClick={() => {
+              handleApplyStash(stashContextMenu.index);
+              setStashContextMenu(null);
+            }}
+          >
+            Apply Stash
+          </div>
+          <div
+            className="context-menu-item"
+            onClick={() => {
+              const stash = stashes.find(
+                (s) => s.index === stashContextMenu.index
+              );
+              if (stash)
+                setStashDiffTarget({ oid: stash.oid, message: stash.message });
+              setStashContextMenu(null);
+            }}
+          >
+            View Diff
+          </div>
+          <div className="context-menu-separator" />
+          <div
+            className="context-menu-item"
+            onClick={() => {
+              const stash = stashes.find(
+                (s) => s.index === stashContextMenu.index
+              );
+              handleDropStash(stashContextMenu.index, stash?.message ?? "");
+              setStashContextMenu(null);
+            }}
+          >
+            Drop Stash...
           </div>
         </div>
       )}

@@ -13,6 +13,9 @@ interface CommitHistoryProps {
   onCreateBranch?: (fromCommit: string) => void;
   onCreateTag?: (fromCommit: string) => void;
   onDeleteTag?: (tagName: string) => void;
+  onApplyStash?: () => void;
+  onPopStash?: () => void;
+  onDropStash?: () => void;
 }
 
 interface GitAuthor {
@@ -35,6 +38,7 @@ interface GitCommit {
   parents: string[];
   branches?: GitBranch[];
   tags?: string[];
+  is_stash: boolean;
   lane: number;
   lines: GraphLine[];
 }
@@ -56,6 +60,9 @@ export function CommitHistory({
   onCreateBranch,
   onCreateTag,
   onDeleteTag,
+  onApplyStash,
+  onPopStash,
+  onDropStash,
 }: CommitHistoryProps) {
   const [commits, setCommits] = useState<{
     All: GitCommit[];
@@ -77,6 +84,10 @@ export function CommitHistory({
     y: number;
     tag: string;
   } | null>(null);
+  const [stashBadgeContextMenu, setStashBadgeContextMenu] = useState<{
+    x: number;
+    y: number;
+  } | null>(null);
   const selectedCommitRef = useRef(selectedCommit);
   selectedCommitRef.current = selectedCommit;
   const commitsRef = useRef(commits);
@@ -88,6 +99,7 @@ export function CommitHistory({
     const handleClick = () => {
       setRowContextMenu(null);
       setTagBadgeContextMenu(null);
+      setStashBadgeContextMenu(null);
     };
     window.addEventListener("click", handleClick);
     return () => window.removeEventListener("click", handleClick);
@@ -464,6 +476,25 @@ export function CommitHistory({
                       </svg>
                     </td>
                     <td className="message">
+                      {commit.is_stash && (
+                        <span
+                          className="stash-badge"
+                          onContextMenu={
+                            onApplyStash || onPopStash || onDropStash
+                              ? (e) => {
+                                  e.preventDefault();
+                                  e.stopPropagation();
+                                  setStashBadgeContextMenu({
+                                    x: e.clientX,
+                                    y: e.clientY,
+                                  });
+                                }
+                              : undefined
+                          }
+                        >
+                          refs/stash
+                        </span>
+                      )}
                       {commit.branches &&
                         commit.branches.map((branch) => {
                           const className = branch.is_head
@@ -555,6 +586,52 @@ export function CommitHistory({
           >
             Delete Tag...
           </div>
+        </div>
+      )}
+      {stashBadgeContextMenu && (onApplyStash || onPopStash || onDropStash) && (
+        <div
+          className="context-menu"
+          style={{
+            left: stashBadgeContextMenu.x,
+            top: stashBadgeContextMenu.y,
+          }}
+        >
+          {onPopStash && (
+            <div
+              className="context-menu-item"
+              onClick={() => {
+                onPopStash();
+                setStashBadgeContextMenu(null);
+              }}
+            >
+              Pop Stash
+            </div>
+          )}
+          {onApplyStash && (
+            <div
+              className="context-menu-item"
+              onClick={() => {
+                onApplyStash();
+                setStashBadgeContextMenu(null);
+              }}
+            >
+              Apply Stash
+            </div>
+          )}
+          {onDropStash && (
+            <>
+              <div className="context-menu-separator" />
+              <div
+                className="context-menu-item"
+                onClick={() => {
+                  onDropStash();
+                  setStashBadgeContextMenu(null);
+                }}
+              >
+                Drop Stash...
+              </div>
+            </>
+          )}
         </div>
       )}
     </div>

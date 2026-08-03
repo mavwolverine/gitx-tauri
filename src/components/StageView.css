@@ -132,6 +132,33 @@
   justify-content: space-between;
 }
 
+.commit-actions-right {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.stash-button {
+  background: #3a3a3a;
+  border: 1px solid #4a4a4a;
+  color: #e0e0e0;
+  border-radius: 3px;
+  padding: 2px 12px;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.stash-button:hover:not(:disabled) {
+  background: #444;
+}
+
+.stash-button:disabled {
+  background: #2d2d2d;
+  color: #666;
+  cursor: not-allowed;
+}
+
 .amend-checkbox {
   display: flex;
   align-items: center;

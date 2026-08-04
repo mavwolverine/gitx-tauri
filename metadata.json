@@ -1,0 +1,31 @@
+{
+  "cli_version": "0.9.0",
+  "checkpoint_id": "01KZ7EZTXZ9VGCS7G06WJCBM7X",
+  "strategy": "manual-commit",
+  "branch": "main",
+  "checkpoints_count": 6,
+  "files_touched": [
+    "ROADMAP.md",
+    "src-tauri/src/git_ops/cherry_pick.rs",
+    "src-tauri/src/git_ops/mod.rs",
+    "src-tauri/src/lib.rs",
+    "src/RepoView.tsx",
+    "src/components/CommitHistory.tsx"
+  ],
+  "sessions": [
+    {
+      "metadata": "/0/metadata.json",
+      "transcript": "/0/full.jsonl",
+      "compact_transcript": "/0/transcript.jsonl",
+      "content_hash": "/0/content_hash.txt",
+      "prompt": "/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 1041,
+    "cache_creation_tokens": 3490397,
+    "cache_read_tokens": 166219367,
+    "output_tokens": 298809,
+    "api_call_count": 521
+  }
+}

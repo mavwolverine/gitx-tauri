@@ -1,0 +1,21 @@
+cherry-pick would be simpler to install?
+
+---
+
+the menu option should be in a separate group, and if it is on the current tree, it should be disabled.
+
+---
+
+cross check the implementation with /tmp/gitx
+
+---
+
+the dynamic label is good, it confirms which branch
+
+---
+
+cherry-pick should just cherry-pick the commit directly right? not leave it staged and editable?
+
+---
+
+yes this sounds good

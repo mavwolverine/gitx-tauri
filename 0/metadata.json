@@ -1,0 +1,141 @@
+{
+  "cli_version": "0.9.0",
+  "checkpoint_id": "01KZ7EZTXZ9VGCS7G06WJCBM7X",
+  "session_id": "006fd1fb-fa49-476a-a980-a55f87015a69",
+  "strategy": "manual-commit",
+  "created_at": "2026-08-04T22:41:42.637246Z",
+  "branch": "main",
+  "checkpoints_count": 6,
+  "save_step_count": 6,
+  "files_touched": [
+    "ROADMAP.md",
+    "src-tauri/src/git_ops/cherry_pick.rs",
+    "src-tauri/src/git_ops/mod.rs",
+    "src-tauri/src/lib.rs",
+    "src/RepoView.tsx",
+    "src/components/CommitHistory.tsx"
+  ],
+  "agent": "Claude Code",
+  "model": "claude-sonnet-5",
+  "turn_id": "3dd2ced3ad64",
+  "compact_transcript_start": 0,
+  "token_usage": {
+    "input_tokens": 1041,
+    "cache_creation_tokens": 3490397,
+    "cache_read_tokens": 166219367,
+    "output_tokens": 298809,
+    "api_call_count": 521
+  },
+  "skill_events_version": 1,
+  "skill_events": [
+    {
+      "id": "claude-skill-toolu_01VbZZwsYdQkWKxbmxYhkYYd",
+      "event_type": "tool_invocation",
+      "skill": {
+        "name": "run"
+      },
+      "source": {
+        "agent": "claude-code",
+        "signal": "skill_tool_use",
+        "confidence": "explicit"
+      },
+      "turn_id": "3dd2ced3ad64",
+      "transcript_anchor": {
+        "unit": "line",
+        "start": 619,
+        "end": 620,
+        "entry_ids": [
+          "5eddc8e3-6f81-4eb0-b976-d1547e598f42"
+        ],
+        "tool_use_id": "toolu_01VbZZwsYdQkWKxbmxYhkYYd"
+      },
+      "native": {
+        "tool_name": "Skill",
+        "tool_use_id": "toolu_01VbZZwsYdQkWKxbmxYhkYYd"
+      },
+      "collapse": {
+        "target": "tool_pair",
+        "label": "Skill: run",
+        "default_collapsed": true
+      }
+    }
+  ],
+  "session_metrics": {
+    "turn_count": 6
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-08-04T22:41:42.43712Z",
+    "agent_lines": 134,
+    "agent_removed": 7,
+    "human_added": 0,
+    "human_modified": 0,
+    "human_removed": 0,
+    "total_committed": 134,
+    "total_lines_changed": 141,
+    "agent_percentage": 100,
+    "metric_version": 2
+  },
+  "prompt_attributions": [
+    {
+      "checkpoint_number": 1,
+      "user_lines_added": 85,
+      "user_lines_removed": 0,
+      "agent_lines_added": 0,
+      "agent_lines_removed": 0,
+      "user_added_per_file": {
+        ".claude/settings.json": 84,
+        "ROADMAP.md": 1
+      }
+    },
+    {
+      "checkpoint_number": 2,
+      "user_lines_added": 84,
+      "user_lines_removed": 0,
+      "agent_lines_added": 1,
+      "agent_lines_removed": 0,
+      "user_added_per_file": {
+        ".claude/settings.json": 84
+      }
+    },
+    {
+      "checkpoint_number": 3,
+      "user_lines_added": 84,
+      "user_lines_removed": 0,
+      "agent_lines_added": 1,
+      "agent_lines_removed": 0,
+      "user_added_per_file": {
+        ".claude/settings.json": 84
+      }
+    },
+    {
+      "checkpoint_number": 4,
+      "user_lines_added": 84,
+      "user_lines_removed": 0,
+      "agent_lines_added": 1,
+      "agent_lines_removed": 0,
+      "user_added_per_file": {
+        ".claude/settings.json": 84
+      }
+    },
+    {
+      "checkpoint_number": 5,
+      "user_lines_added": 84,
+      "user_lines_removed": 0,
+      "agent_lines_added": 1,
+      "agent_lines_removed": 0,
+      "user_added_per_file": {
+        ".claude/settings.json": 84
+      }
+    },
+    {
+      "checkpoint_number": 6,
+      "user_lines_added": 84,
+      "user_lines_removed": 0,
+      "agent_lines_added": 1,
+      "agent_lines_removed": 0,
+      "user_added_per_file": {
+        ".claude/settings.json": 84
+      }
+    }
+  ]
+}

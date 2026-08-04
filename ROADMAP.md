@@ -15,13 +15,13 @@ Status of GitX-Tauri as a daily-driver Git GUI, and what's planned next.
 - 📥 Clone repositories over SSH
 - 🕵️ File blame and per-file history
 - 🖥️ Cross-platform (macOS, Linux, Windows)
+- 📦 Stash management — save (with optional untracked files), list, apply, pop, drop, and view a stash's diff; the most recent stash also shows as a node in the commit graph, same as `git log --graph`
+- 🔎 Commit search — find commits by message, author, or SHA; Enter/Shift+Enter or the ‹/› buttons cycle through matches, jumping to and selecting each one in the graph
 
 ## Planned — critical gaps
 
 These are the biggest blockers to using GitX-Tauri as a primary Git client.
 
-- [ ] **Commit search** — find commits by message, author, or SHA. Currently the only filter is branch-level; there's no text search at all.
-- [ ] **Stash management** — save, list, apply, pop, drop. No stash support exists today, so there's no way to shelve work temporarily without committing.
 - [ ] **Merge operations** — no merge UI exists; "merge" currently only appears in a graph-rendering comment. Plan: start with fast-forward / clean three-way merges (`git2::Repository::merge` + a two-parent commit), which is a small addition on top of the existing commit/checkout commands.
 - [ ] **Conflict detection & resolution UI** — no support at all today. Scope after clean-merge support ships: surface conflicted files (libgit2 exposes these natively via repo state + index conflict entries) with a resolution view, rather than punting to the terminal.
 

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import "./CommitHistory.css";
@@ -219,6 +219,22 @@ export function CommitHistory({
     }
   }, [jumpTarget, onCommitSelect]);
 
+  const jumpToCommit = useCallback(
+    (commit: GitCommit) => {
+      if (branchFilterRef.current !== "All") setBranchFilter("All");
+      setSelectedCommit(commit);
+      onCommitSelect(commit);
+      setTimeout(() => {
+        const element = document.querySelector(
+          `[data-commit-id="${commit.id}"]`
+        );
+        if (element)
+          element.scrollIntoView({ behavior: "smooth", block: "center" });
+      }, 0);
+    },
+    [onCommitSelect]
+  );
+
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key !== "ArrowUp" && e.key !== "ArrowDown") return;
@@ -341,53 +357,82 @@ export function CommitHistory({
             </button>
           )}
         </div>
-        <div className="filter-btn-group">
-          <button
-            className={`filter-btn icon-btn ${commitViewMode === "detail" ? "active" : ""}`}
-            onClick={() => onCommitViewModeChange("detail")}
-            title="Detailed View"
-            aria-label="Detailed View"
-          >
-            <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
-              <rect x="0" y="1" width="2" height="2" />
-              <rect x="4" y="1" width="12" height="2" />
-              <rect x="0" y="7" width="2" height="2" />
-              <rect x="4" y="7" width="12" height="2" />
-              <rect x="0" y="13" width="2" height="2" />
-              <rect x="4" y="13" width="12" height="2" />
-            </svg>
-          </button>
-          <button
-            className={`filter-btn icon-btn ${commitViewMode === "tree" ? "active" : ""}`}
-            onClick={() => onCommitViewModeChange("tree")}
-            title="Tree View"
-            aria-label="Tree View"
-          >
-            <svg
-              width="14"
-              height="14"
-              viewBox="0 0 16 16"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="1.5"
+        <div className="right-controls">
+          <CommitSearchBox
+            allCommits={commits.All}
+            onJumpToCommit={jumpToCommit}
+          />
+          <div className="filter-btn-group">
+            <button
+              className={`filter-btn icon-btn ${commitViewMode === "detail" ? "active" : ""}`}
+              onClick={() => onCommitViewModeChange("detail")}
+              title="Detailed View"
+              aria-label="Detailed View"
             >
-              <rect x="6.5" y="0.5" width="3" height="3" fill="currentColor" />
-              <line x1="8" y1="3.5" x2="8" y2="8" />
-              <line x1="2" y1="8" x2="14" y2="8" />
-              <line x1="2" y1="8" x2="2" y2="10.5" />
-              <line x1="8" y1="8" x2="8" y2="10.5" />
-              <line x1="14" y1="8" x2="14" y2="10.5" />
-              <rect x="0.5" y="10.5" width="3" height="3" fill="currentColor" />
-              <rect x="6.5" y="10.5" width="3" height="3" fill="currentColor" />
-              <rect
-                x="12.5"
-                y="10.5"
-                width="3"
-                height="3"
+              <svg
+                width="14"
+                height="14"
+                viewBox="0 0 16 16"
                 fill="currentColor"
-              />
-            </svg>
-          </button>
+              >
+                <rect x="0" y="1" width="2" height="2" />
+                <rect x="4" y="1" width="12" height="2" />
+                <rect x="0" y="7" width="2" height="2" />
+                <rect x="4" y="7" width="12" height="2" />
+                <rect x="0" y="13" width="2" height="2" />
+                <rect x="4" y="13" width="12" height="2" />
+              </svg>
+            </button>
+            <button
+              className={`filter-btn icon-btn ${commitViewMode === "tree" ? "active" : ""}`}
+              onClick={() => onCommitViewModeChange("tree")}
+              title="Tree View"
+              aria-label="Tree View"
+            >
+              <svg
+                width="14"
+                height="14"
+                viewBox="0 0 16 16"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.5"
+              >
+                <rect
+                  x="6.5"
+                  y="0.5"
+                  width="3"
+                  height="3"
+                  fill="currentColor"
+                />
+                <line x1="8" y1="3.5" x2="8" y2="8" />
+                <line x1="2" y1="8" x2="14" y2="8" />
+                <line x1="2" y1="8" x2="2" y2="10.5" />
+                <line x1="8" y1="8" x2="8" y2="10.5" />
+                <line x1="14" y1="8" x2="14" y2="10.5" />
+                <rect
+                  x="0.5"
+                  y="10.5"
+                  width="3"
+                  height="3"
+                  fill="currentColor"
+                />
+                <rect
+                  x="6.5"
+                  y="10.5"
+                  width="3"
+                  height="3"
+                  fill="currentColor"
+                />
+                <rect
+                  x="12.5"
+                  y="10.5"
+                  width="3"
+                  height="3"
+                  fill="currentColor"
+                />
+              </svg>
+            </button>
+          </div>
         </div>
       </div>
       <div className="commit-table-container">
@@ -634,6 +679,109 @@ export function CommitHistory({
           )}
         </div>
       )}
+    </div>
+  );
+}
+
+// Isolated so that typing in the search box only re-renders this tiny
+// component instead of the (potentially thousands-of-rows) commit table in
+// the parent — keeping it here made every keystroke visibly laggy.
+function CommitSearchBox({
+  allCommits,
+  onJumpToCommit,
+}: {
+  allCommits: GitCommit[];
+  onJumpToCommit: (commit: GitCommit) => void;
+}) {
+  const [query, setQuery] = useState("");
+  const [matchIndex, setMatchIndex] = useState(-1);
+  const matchIndexRef = useRef(matchIndex);
+  matchIndexRef.current = matchIndex;
+
+  const matches = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    if (!q) return [];
+    return allCommits.filter(
+      (c) =>
+        c.message.toLowerCase().includes(q) ||
+        c.author.name.toLowerCase().includes(q) ||
+        c.id.toLowerCase().includes(q)
+    );
+  }, [allCommits, query]);
+
+  // Jump to the first match a moment after typing stops, so results feel
+  // "live" without re-rendering the (large) commit table on every keystroke.
+  // Guarded so a pending auto-jump can't clobber a match the user already
+  // navigated to via the buttons/Enter in the meantime.
+  useEffect(() => {
+    setMatchIndex(-1);
+    if (matches.length === 0) return;
+    const handle = setTimeout(() => {
+      if (matchIndexRef.current !== -1) return;
+      setMatchIndex(0);
+      onJumpToCommit(matches[0]);
+    }, 250);
+    return () => clearTimeout(handle);
+  }, [matches, onJumpToCommit]);
+
+  const goToMatch = (direction: 1 | -1) => {
+    if (matches.length === 0) return;
+    const nextIndex =
+      matchIndex === -1
+        ? direction === 1
+          ? 0
+          : matches.length - 1
+        : (matchIndex + direction + matches.length) % matches.length;
+    setMatchIndex(nextIndex);
+    onJumpToCommit(matches[nextIndex]);
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key !== "Enter") return;
+    e.preventDefault();
+    goToMatch(e.shiftKey ? -1 : 1);
+  };
+
+  return (
+    <div className="search-group">
+      <span className="search-match-count">
+        {query.trim() === ""
+          ? ""
+          : matches.length === 0
+            ? "No matches"
+            : `${matchIndex + 1}/${matches.length}`}
+      </span>
+      <button
+        type="button"
+        className="search-nav-btn"
+        disabled={matches.length === 0}
+        onClick={() => goToMatch(-1)}
+        title="Previous match"
+        aria-label="Previous match"
+      >
+        ‹
+      </button>
+      <button
+        type="button"
+        className="search-nav-btn"
+        disabled={matches.length === 0}
+        onClick={() => goToMatch(1)}
+        title="Next match"
+        aria-label="Next match"
+      >
+        ›
+      </button>
+      <input
+        type="text"
+        className="search-input"
+        placeholder="Search message, author, or SHA..."
+        value={query}
+        onChange={(e) => setQuery(e.target.value)}
+        onKeyDown={handleKeyDown}
+        spellCheck={false}
+        autoCorrect="off"
+        autoCapitalize="off"
+      />
     </div>
   );
 }

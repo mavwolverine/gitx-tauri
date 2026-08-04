@@ -213,6 +213,18 @@ fn create_commit(path: String, message: String, amend: bool) -> Result<String, S
 }
 
 #[tauri::command]
+fn cherry_pick(path: String, commit_id: String) -> Result<String, String> {
+    let repo = git_ops::open_repository(&path).map_err(|e| e.to_string())?;
+    git_ops::cherry_pick(&repo, &commit_id).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn is_ancestor_of_head(path: String, commit_id: String) -> Result<bool, String> {
+    let repo = git_ops::open_repository(&path).map_err(|e| e.to_string())?;
+    git_ops::is_ancestor_of_head(&repo, &commit_id).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
 fn create_branch(path: String, branch_name: String, from_branch: String) -> Result<(), String> {
     let repo = git_ops::open_repository(&path).map_err(|e| e.to_string())?;
     git_ops::create_branch(&repo, &branch_name, &from_branch).map_err(|e| e.to_string())
@@ -470,6 +482,8 @@ pub fn run() {
             discard_hunk,
             ignore_file,
             create_commit,
+            cherry_pick,
+            is_ancestor_of_head,
             create_branch,
             create_tag,
             delete_tag,

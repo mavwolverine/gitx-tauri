@@ -7,12 +7,14 @@ interface CommitHistoryProps {
   repoPath: string;
   onCommitSelect: (commit: GitCommit | null) => void;
   currentBranch?: string;
+  headBranchName?: string;
   jumpTarget?: { id: string; nonce: number } | null;
   commitViewMode: "detail" | "tree";
   onCommitViewModeChange: (mode: "detail" | "tree") => void;
   onCreateBranch?: (fromCommit: string) => void;
   onCreateTag?: (fromCommit: string) => void;
   onDeleteTag?: (tagName: string) => void;
+  onCherryPick?: (commitId: string) => void;
   onApplyStash?: () => void;
   onPopStash?: () => void;
   onDropStash?: () => void;
@@ -54,12 +56,14 @@ export function CommitHistory({
   repoPath,
   onCommitSelect,
   currentBranch,
+  headBranchName,
   jumpTarget,
   commitViewMode,
   onCommitViewModeChange,
   onCreateBranch,
   onCreateTag,
   onDeleteTag,
+  onCherryPick,
   onApplyStash,
   onPopStash,
   onDropStash,
@@ -78,6 +82,7 @@ export function CommitHistory({
     x: number;
     y: number;
     commitId: string;
+    isAncestorOfHead: boolean | null;
   } | null>(null);
   const [tagBadgeContextMenu, setTagBadgeContextMenu] = useState<{
     x: number;
@@ -317,6 +322,22 @@ export function CommitHistory({
     onCommitSelect(commit);
   };
 
+  const handleRowContextMenu = (x: number, y: number, commitId: string) => {
+    setRowContextMenu({ x, y, commitId, isAncestorOfHead: null });
+    if (!onCherryPick) return;
+    invoke<boolean>("is_ancestor_of_head", { path: repoPath, commitId })
+      .then((isAncestorOfHead) => {
+        setRowContextMenu((prev) =>
+          prev && prev.commitId === commitId
+            ? { ...prev, isAncestorOfHead }
+            : prev
+        );
+      })
+      .catch((error) =>
+        console.error("Failed to check commit ancestry:", error)
+      );
+  };
+
   const formatDate = (timestamp: string) => {
     const date = new Date(parseInt(timestamp) * 1000);
     return `${date.toLocaleDateString("en-US", {
@@ -485,11 +506,7 @@ export function CommitHistory({
                     onClick={() => handleCommitClick(commit)}
                     onContextMenu={(e) => {
                       e.preventDefault();
-                      setRowContextMenu({
-                        x: e.clientX,
-                        y: e.clientY,
-                        commitId: commit.id,
-                      });
+                      handleRowContextMenu(e.clientX, e.clientY, commit.id);
                     }}
                   >
                     <td className="sha">{commit.id.substring(0, 7)}</td>
@@ -588,7 +605,7 @@ export function CommitHistory({
           </tbody>
         </table>
       </div>
-      {rowContextMenu && (onCreateBranch || onCreateTag) && (
+      {rowContextMenu && (onCreateBranch || onCreateTag || onCherryPick) && (
         <div
           className="context-menu"
           style={{ left: rowContextMenu.x, top: rowContextMenu.y }}
@@ -615,6 +632,29 @@ export function CommitHistory({
               Create Tag...
             </div>
           )}
+          {onCherryPick &&
+            (() => {
+              // Treat "still checking" the same as disabled, so the item
+              // doesn't briefly flash enabled before flipping to disabled.
+              const disabled = rowContextMenu.isAncestorOfHead !== false;
+              return (
+                <>
+                  <div className="context-menu-separator" />
+                  <div
+                    className={`context-menu-item ${disabled ? "disabled" : ""}`}
+                    onClick={() => {
+                      if (disabled) return;
+                      onCherryPick(rowContextMenu.commitId);
+                      setRowContextMenu(null);
+                    }}
+                  >
+                    {headBranchName && !disabled
+                      ? `Cherry-pick to "${headBranchName}"`
+                      : "Cherry-pick"}
+                  </div>
+                </>
+              );
+            })()}
         </div>
       )}
       {tagBadgeContextMenu && onDeleteTag && (

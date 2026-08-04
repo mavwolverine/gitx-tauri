@@ -17,6 +17,7 @@ Status of GitX-Tauri as a daily-driver Git GUI, and what's planned next.
 - 🖥️ Cross-platform (macOS, Linux, Windows)
 - 📦 Stash management — save (with optional untracked files), list, apply, pop, drop, and view a stash's diff; the most recent stash also shows as a node in the commit graph, same as `git log --graph`
 - 🔎 Commit search — find commits by message, author, or SHA; Enter/Shift+Enter or the ‹/› buttons cycle through matches, jumping to and selecting each one in the graph
+- 🍒 Cherry-pick — right-click a commit in the graph to cherry-pick it onto the actual checked-out branch (not whichever branch is just being viewed); auto-commits with the original message/author on success, surfaces a clear error and leaves the repo in `CherryPick` state for manual resolution on conflict; menu item is disabled and relabeled based on a dedicated ancestry check, not the loaded commit list
 
 ## Planned — critical gaps
 
@@ -28,9 +29,9 @@ These are the biggest blockers to using GitX-Tauri as a primary Git client.
 ## Planned — important
 
 - [ ] **Rebase** — standard and interactive
-- [ ] **Cherry-pick**
 - [ ] **Keyboard shortcuts** — currently only arrow-key navigation in the commit list; no global shortcuts (e.g. Cmd+S to commit, Cmd+F to search)
 - [ ] **Undo last commit** — soft reset from the UI
+- [ ] **"Diff with `<current branch>`"** — right-click a commit in the graph to diff it against the current branch's HEAD, not just against its own parent (today `get_commit_diff` only ever diffs a commit against `parent(0)`)
 
 ## Planned — polish
 

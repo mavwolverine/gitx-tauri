@@ -401,6 +401,18 @@ function RepoView({ repoPath }: RepoViewProps) {
     }
   };
 
+  const handleCherryPick = async (commitId: string) => {
+    try {
+      await invoke("cherry_pick", { path: repoPath, commitId });
+      showStatus(`Cherry-picked ${commitId.substring(0, 7)}`);
+    } catch (error) {
+      await message(`Failed to cherry-pick: ${error}`, {
+        title: "Cherry-pick Error",
+        kind: "error",
+      });
+    }
+  };
+
   const handleSaveStash = async (
     stashMessage: string | null,
     includeUntracked: boolean
@@ -895,12 +907,14 @@ function RepoView({ repoPath }: RepoViewProps) {
                     repoPath={repoPath}
                     onCommitSelect={handleCommitSelect}
                     currentBranch={selectedBranch}
+                    headBranchName={branches.find((b) => b.is_head)?.name}
                     jumpTarget={jumpTarget}
                     commitViewMode={commitViewMode}
                     onCommitViewModeChange={setCommitViewMode}
                     onCreateBranch={handleCreateBranch}
                     onCreateTag={handleCreateTag}
                     onDeleteTag={handleDeleteTag}
+                    onCherryPick={handleCherryPick}
                     onApplyStash={() => handleApplyStash(0)}
                     onPopStash={() => handlePopStash(0)}
                     onDropStash={() =>

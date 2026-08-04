@@ -1,4 +1,5 @@
 mod branch;
+mod cherry_pick;
 mod commit;
 mod common;
 mod file;
@@ -10,6 +11,7 @@ mod submodule;
 mod tag;
 
 pub use branch::*;
+pub use cherry_pick::*;
 pub use commit::*;
 pub use file::*;
 pub use remote::*;

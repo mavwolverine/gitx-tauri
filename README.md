@@ -31,6 +31,11 @@ GitX is a beloved macOS Git GUI that's no longer actively maintained and has com
 - [Node.js](https://nodejs.org/) (v18 or later)
 - [pnpm](https://pnpm.io/) (recommended) or npm
 
+#### Ubuntu
+```
+apt install -y libglib2.0-0 libgtk-3-dev libsoup-3.0-0 libwebkit2gtk-4.1-dev libssl-dev librsvg2-dev
+```
+
 ### Building from Source
 
 ```bash

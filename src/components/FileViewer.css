@@ -80,6 +80,11 @@
 .blame-sha {
   color: #4ec9b0;
   flex-shrink: 0;
+  cursor: pointer;
+}
+
+.blame-sha:hover {
+  text-decoration: underline;
 }
 
 .blame-author {

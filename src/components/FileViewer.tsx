@@ -203,7 +203,11 @@ export function FileViewer({
                     className="blame-meta"
                     title={`${group.author} — ${formatDate(group.timestamp)}`}
                   >
-                    <span className="blame-sha">
+                    <span
+                      className="blame-sha"
+                      onClick={() => onJumpToCommit(group.commit_id)}
+                      title={`Jump to commit ${group.commit_id}`}
+                    >
                       {group.commit_id.substring(0, 7)}
                     </span>
                     <span className="blame-author">{group.author}</span>

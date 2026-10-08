@@ -53,6 +53,24 @@
   font-size: 12px;
   font-weight: 500;
   border-bottom: 1px solid #333;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.selection-count {
+  color: #8ab4f8;
+  font-size: 11px;
+  font-weight: 400;
+}
+
+.stage-panel.focused .panel-header {
+  box-shadow: inset 0 -1px 0 #8ab4f8;
+}
+
+.stage-panel:focus {
+  outline: none;
 }
 
 .panel-content {
@@ -71,6 +89,7 @@
   display: flex;
   align-items: center;
   gap: 4px;
+  user-select: none;
 }
 
 .file-item:hover {
@@ -79,6 +98,10 @@
 
 .file-item.selected {
   background: #3a5a7a;
+}
+
+.file-item.selected.active {
+  background: #4a6a8a;
 }
 
 .file-status-dot {

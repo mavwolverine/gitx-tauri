@@ -73,7 +73,16 @@ ssh-add ~/.ssh/id_rsa  # or your specific key file
 
 ### Keyboard Shortcuts
 
-_Coming soon_
+| Shortcut | Action |
+| --- | --- |
+| `Ctrl/Cmd+1` | History view |
+| `Ctrl/Cmd+2` | Stage view |
+| `Ctrl/Cmd+A` | Select all files in the focused stage list |
+| `s` or `Ctrl/Cmd+S` | Stage selected files |
+| `u` or `Ctrl/Cmd+U` | Unstage selected files |
+| `Enter` | Stage or unstage selected files (focused list) |
+
+In the stage lists, `Ctrl/Cmd+click` toggles selection and `Shift+click` selects a range.
 
 ## Technology Stack
 

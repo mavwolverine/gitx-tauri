@@ -11,14 +11,44 @@ interface FileStatus {
   staged: boolean;
 }
 
+type FileList = "unstaged" | "staged";
+
 interface StageViewProps {
   repoPath: string;
   onStash?: () => void;
 }
 
+function isEditableTarget(target: EventTarget | null): boolean {
+  if (!(target instanceof HTMLElement)) return false;
+  const tag = target.tagName;
+  return (
+    tag === "INPUT" ||
+    tag === "TEXTAREA" ||
+    tag === "SELECT" ||
+    target.isContentEditable
+  );
+}
+
+function rangeSelect(
+  files: FileStatus[],
+  anchor: string | null,
+  target: string
+): Set<string> {
+  if (!anchor) return new Set([target]);
+  const paths = files.map((f) => f.path);
+  const a = paths.indexOf(anchor);
+  const b = paths.indexOf(target);
+  if (a === -1 || b === -1) return new Set([target]);
+  const [start, end] = a < b ? [a, b] : [b, a];
+  return new Set(paths.slice(start, end + 1));
+}
+
 export function StageView({ repoPath, onStash }: StageViewProps) {
   const [unstagedFiles, setUnstagedFiles] = useState<FileStatus[]>([]);
   const [stagedFiles, setStagedFiles] = useState<FileStatus[]>([]);
+  const [selectedPaths, setSelectedPaths] = useState<Set<string>>(new Set());
+  const [focusedList, setFocusedList] = useState<FileList>("unstaged");
+  const [anchorPath, setAnchorPath] = useState<string | null>(null);
   const [selectedFile, setSelectedFile] = useState<string | null>(null);
   const [selectedStaged, setSelectedStaged] = useState<boolean>(false);
   const [diff, setDiff] = useState<string>("");
@@ -31,10 +61,19 @@ export function StageView({ repoPath, onStash }: StageViewProps) {
     staged: boolean;
     status: string;
   } | null>(null);
+
   const selectedFileRef = useRef(selectedFile);
   const selectedStagedRef = useRef(selectedStaged);
+  const selectedPathsRef = useRef(selectedPaths);
+  const focusedListRef = useRef(focusedList);
+  const unstagedFilesRef = useRef(unstagedFiles);
+  const stagedFilesRef = useRef(stagedFiles);
   selectedFileRef.current = selectedFile;
   selectedStagedRef.current = selectedStaged;
+  selectedPathsRef.current = selectedPaths;
+  focusedListRef.current = focusedList;
+  unstagedFilesRef.current = unstagedFiles;
+  stagedFilesRef.current = stagedFiles;
 
   const getStatusPriority = (status: string) => {
     const s = status[0].toUpperCase();
@@ -42,6 +81,32 @@ export function StageView({ repoPath, onStash }: StageViewProps) {
     if (s === "M") return 1;
     return 0;
   };
+
+  const loadDiff = useCallback(
+    async (filePath: string, staged: boolean) => {
+      try {
+        const diffText = await invoke<string>("get_diff", {
+          path: repoPath,
+          filePath,
+          staged,
+        });
+        setDiff(diffText);
+      } catch (error) {
+        console.error("Failed to load diff:", error);
+        setDiff("");
+      }
+    },
+    [repoPath]
+  );
+
+  const activateFile = useCallback(
+    (filePath: string, staged: boolean) => {
+      setSelectedFile(filePath);
+      setSelectedStaged(staged);
+      loadDiff(filePath, staged);
+    },
+    [loadDiff]
+  );
 
   const loadStatus = useCallback(async () => {
     try {
@@ -61,28 +126,30 @@ export function StageView({ repoPath, onStash }: StageViewProps) {
       setUnstagedFiles(unstaged);
       setStagedFiles(staged);
 
-      // Clear selection if selected file no longer exists in the same state
+      const validUnstaged = new Set(unstaged.map((f) => f.path));
+      const validStaged = new Set(staged.map((f) => f.path));
+      const list = focusedListRef.current;
+      const valid = list === "staged" ? validStaged : validUnstaged;
+
+      setSelectedPaths((prev) => {
+        const next = new Set([...prev].filter((p) => valid.has(p)));
+        return next;
+      });
+
       const currentSelectedFile = selectedFileRef.current;
       if (currentSelectedFile) {
         const fileExists = selectedStagedRef.current
-          ? staged.some((f) => f.path === currentSelectedFile)
-          : unstaged.some((f) => f.path === currentSelectedFile);
-        console.log("Check file exists:", {
-          selectedFile: currentSelectedFile,
-          selectedStaged: selectedStagedRef.current,
-          fileExists,
-          stagedCount: staged.length,
-          unstagedCount: unstaged.length,
-        });
+          ? validStaged.has(currentSelectedFile)
+          : validUnstaged.has(currentSelectedFile);
         if (!fileExists) {
           setSelectedFile(null);
           setDiff("");
         }
       }
 
-      // Clear selection if no files remain
       if (unstaged.length === 0 && staged.length === 0) {
         setSelectedFile(null);
+        setSelectedPaths(new Set());
         setDiff("");
       }
     } catch (error) {
@@ -108,24 +175,40 @@ export function StageView({ repoPath, onStash }: StageViewProps) {
     return () => window.removeEventListener("click", handleClick);
   }, []);
 
-  const loadDiff = async (filePath: string, staged: boolean) => {
-    try {
-      const diffText = await invoke<string>("get_diff", {
-        path: repoPath,
-        filePath,
-        staged,
-      });
-      setDiff(diffText);
-    } catch (error) {
-      console.error("Failed to load diff:", error);
-      setDiff("");
-    }
-  };
+  const handleFileClick = (
+    e: React.MouseEvent,
+    filePath: string,
+    list: FileList
+  ) => {
+    const files = list === "unstaged" ? unstagedFiles : stagedFiles;
+    const staged = list === "staged";
+    setFocusedList(list);
+    setContextMenu(null);
 
-  const handleFileSelect = (filePath: string, staged: boolean) => {
-    setSelectedFile(filePath);
-    setSelectedStaged(staged);
-    loadDiff(filePath, staged);
+    if (e.shiftKey) {
+      const next = rangeSelect(files, anchorPath, filePath);
+      setSelectedPaths(next);
+      activateFile(filePath, staged);
+      return;
+    }
+
+    if (e.metaKey || e.ctrlKey) {
+      // Keep selection within the focused list only
+      const listPaths = new Set(files.map((f) => f.path));
+      setSelectedPaths((prev) => {
+        const next = new Set([...prev].filter((p) => listPaths.has(p)));
+        if (next.has(filePath)) next.delete(filePath);
+        else next.add(filePath);
+        return next;
+      });
+      setAnchorPath(filePath);
+      activateFile(filePath, staged);
+      return;
+    }
+
+    setSelectedPaths(new Set([filePath]));
+    setAnchorPath(filePath);
+    activateFile(filePath, staged);
   };
 
   const handleContextMenu = (
@@ -135,28 +218,142 @@ export function StageView({ repoPath, onStash }: StageViewProps) {
     status: string
   ) => {
     e.preventDefault();
+    const list: FileList = staged ? "staged" : "unstaged";
+    setFocusedList(list);
+    setSelectedPaths((prev) => {
+      if (prev.has(file)) return prev;
+      return new Set([file]);
+    });
+    setAnchorPath(file);
+    activateFile(file, staged);
     setContextMenu({ x: e.clientX, y: e.clientY, file, staged, status });
   };
 
-  const handleStageFile = async (file: string) => {
-    try {
-      await invoke("stage_file", { path: repoPath, filePath: file });
+  const stageFiles = useCallback(
+    async (paths: string[]) => {
+      if (paths.length === 0) return;
       setContextMenu(null);
-      loadStatus();
-    } catch (error) {
-      await message(`Failed to stage file: ${error}`, {
-        title: "Error",
-        kind: "error",
-      });
-    }
+      setSelectedPaths(new Set());
+      const errors: string[] = [];
+      for (const filePath of paths) {
+        try {
+          await invoke("stage_file", { path: repoPath, filePath });
+        } catch (error) {
+          errors.push(`${filePath}: ${error}`);
+        }
+      }
+      await loadStatus();
+      if (errors.length > 0) {
+        await message(`Failed to stage:\n${errors.join("\n")}`, {
+          title: "Error",
+          kind: "error",
+        });
+      }
+    },
+    [repoPath, loadStatus]
+  );
+
+  const unstageFiles = useCallback(
+    async (paths: string[]) => {
+      if (paths.length === 0) return;
+      setContextMenu(null);
+      setSelectedPaths(new Set());
+      const errors: string[] = [];
+      for (const filePath of paths) {
+        try {
+          await invoke("unstage_file", { path: repoPath, filePath });
+        } catch (error) {
+          errors.push(`${filePath}: ${error}`);
+        }
+      }
+      await loadStatus();
+      if (errors.length > 0) {
+        await message(`Failed to unstage:\n${errors.join("\n")}`, {
+          title: "Error",
+          kind: "error",
+        });
+      }
+    },
+    [repoPath, loadStatus]
+  );
+
+  const handleStageFile = async (file: string) => {
+    await stageFiles([file]);
   };
+
+  const handleUnstageFile = async (file: string) => {
+    await unstageFiles([file]);
+  };
+
+  const selectedInFocusedList = useCallback(() => {
+    const list = focusedListRef.current;
+    const files =
+      list === "unstaged"
+        ? unstagedFilesRef.current
+        : stagedFilesRef.current;
+    const valid = new Set(files.map((f) => f.path));
+    return [...selectedPathsRef.current].filter((p) => valid.has(p));
+  }, []);
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (isEditableTarget(e.target)) return;
+
+      const mod = e.metaKey || e.ctrlKey;
+      const key = e.key.toLowerCase();
+
+      // Ctrl/Cmd+A — select all in focused list
+      if (mod && key === "a" && !e.altKey) {
+        e.preventDefault();
+        e.stopPropagation();
+        const files =
+          focusedListRef.current === "unstaged"
+            ? unstagedFilesRef.current
+            : stagedFilesRef.current;
+        if (files.length === 0) return;
+        setSelectedPaths(new Set(files.map((f) => f.path)));
+        setAnchorPath(files[0].path);
+        activateFile(files[0].path, focusedListRef.current === "staged");
+        return;
+      }
+
+      // s / Ctrl+S — stage; u / Ctrl+U — unstage; Enter — same as focused list
+      const paths = selectedInFocusedList();
+      if (paths.length === 0) return;
+
+      if ((key === "s" || e.code === "KeyS") && !e.altKey && !e.shiftKey) {
+        if (focusedListRef.current !== "unstaged") return;
+        e.preventDefault();
+        e.stopPropagation();
+        void stageFiles(paths);
+        return;
+      }
+
+      if ((key === "u" || e.code === "KeyU") && !e.altKey && !e.shiftKey) {
+        if (focusedListRef.current !== "staged") return;
+        e.preventDefault();
+        e.stopPropagation();
+        void unstageFiles(paths);
+        return;
+      }
+
+      if (e.key === "Enter" && !mod && !e.altKey && !e.shiftKey) {
+        e.preventDefault();
+        e.stopPropagation();
+        if (focusedListRef.current === "unstaged") void stageFiles(paths);
+        else void unstageFiles(paths);
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [activateFile, selectedInFocusedList, stageFiles, unstageFiles]);
 
   const handleStageHunk = async (hunkHeader?: string, hunkLines?: string) => {
     if (!selectedFile || !hunkHeader || !hunkLines) return;
 
     try {
       if (selectedStaged) {
-        // Unstage the hunk
         await invoke("unstage_hunk", {
           path: repoPath,
           filePath: selectedFile,
@@ -165,7 +362,6 @@ export function StageView({ repoPath, onStash }: StageViewProps) {
           hunkLines,
         });
       } else {
-        // Stage the hunk
         await invoke("stage_hunk", {
           path: repoPath,
           filePath: selectedFile,
@@ -184,19 +380,6 @@ export function StageView({ repoPath, onStash }: StageViewProps) {
           kind: "error",
         }
       );
-    }
-  };
-
-  const handleUnstageFile = async (file: string) => {
-    try {
-      await invoke("unstage_file", { path: repoPath, filePath: file });
-      setContextMenu(null);
-      loadStatus();
-    } catch (error) {
-      await message(`Failed to unstage file: ${error}`, {
-        title: "Error",
-        kind: "error",
-      });
     }
   };
 
@@ -273,6 +456,62 @@ export function StageView({ repoPath, onStash }: StageViewProps) {
     return "#9ca3af";
   };
 
+  const contextSelection = (() => {
+    if (!contextMenu) return [] as string[];
+    const list = contextMenu.staged ? stagedFiles : unstagedFiles;
+    const valid = new Set(list.map((f) => f.path));
+    const selected = [...selectedPaths].filter((p) => valid.has(p));
+    if (selected.length > 0) return selected;
+    return [contextMenu.file];
+  })();
+
+  const renderFileList = (list: FileList, files: FileStatus[]) => {
+    const staged = list === "staged";
+    return (
+      <div
+        className={`stage-panel ${focusedList === list ? "focused" : ""}`}
+        tabIndex={0}
+        onMouseDown={() => setFocusedList(list)}
+      >
+        <div className="panel-header">
+          {staged ? "Staged Changes" : "Unstaged Changes"}
+          {focusedList === list && selectedPaths.size > 1 ? (
+            <span className="selection-count">{selectedPaths.size} selected</span>
+          ) : null}
+        </div>
+        <div className="panel-content">
+          {files.map((file) => {
+            const isSelected = selectedPaths.has(file.path);
+            const isActive =
+              selectedFile === file.path && selectedStaged === staged;
+            return (
+              <div
+                key={file.path}
+                className={`file-item ${isSelected ? "selected" : ""} ${isActive ? "active" : ""}`}
+                onClick={(e) => handleFileClick(e, file.path, list)}
+                onDoubleClick={() =>
+                  staged
+                    ? handleUnstageFile(file.path)
+                    : handleStageFile(file.path)
+                }
+                onContextMenu={(e) =>
+                  handleContextMenu(e, file.path, staged, file.status)
+                }
+              >
+                <span className="file-status">
+                  {file.status[0].toUpperCase()}
+                </span>
+                <span style={{ color: getStatusColor(file.status) }}>
+                  {file.path}
+                </span>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    );
+  };
+
   return (
     <div className="stage-view">
       <div className="stage-main">
@@ -281,6 +520,7 @@ export function StageView({ repoPath, onStash }: StageViewProps) {
             <div className="stage-diff-header">
               {selectedStaged ? "Staged" : "Unstaged"} changes for{" "}
               {selectedFile}
+              {selectedPaths.size > 1 ? ` (+${selectedPaths.size - 1} more)` : ""}
             </div>
             <div className="diff-container">
               <DiffView
@@ -297,29 +537,7 @@ export function StageView({ repoPath, onStash }: StageViewProps) {
         )}
       </div>
       <div className="stage-bottom">
-        <div className="stage-panel">
-          <div className="panel-header">Unstaged Changes</div>
-          <div className="panel-content">
-            {unstagedFiles.map((file) => (
-              <div
-                key={file.path}
-                className={`file-item ${selectedFile === file.path && !selectedStaged ? "selected" : ""}`}
-                onClick={() => handleFileSelect(file.path, false)}
-                onDoubleClick={() => handleStageFile(file.path)}
-                onContextMenu={(e) =>
-                  handleContextMenu(e, file.path, false, file.status)
-                }
-              >
-                <span className="file-status">
-                  {file.status[0].toUpperCase()}
-                </span>
-                <span style={{ color: getStatusColor(file.status) }}>
-                  {file.path}
-                </span>
-              </div>
-            ))}
-          </div>
-        </div>
+        {renderFileList("unstaged", unstagedFiles)}
         <div className="stage-panel commit-panel">
           <div className="panel-header">Commit Message</div>
           <div className="panel-content">
@@ -364,29 +582,7 @@ export function StageView({ repoPath, onStash }: StageViewProps) {
             </div>
           </div>
         </div>
-        <div className="stage-panel">
-          <div className="panel-header">Staged Changes</div>
-          <div className="panel-content">
-            {stagedFiles.map((file) => (
-              <div
-                key={file.path}
-                className={`file-item ${selectedFile === file.path && selectedStaged ? "selected" : ""}`}
-                onClick={() => handleFileSelect(file.path, true)}
-                onDoubleClick={() => handleUnstageFile(file.path)}
-                onContextMenu={(e) =>
-                  handleContextMenu(e, file.path, true, file.status)
-                }
-              >
-                <span className="file-status">
-                  {file.status[0].toUpperCase()}
-                </span>
-                <span style={{ color: getStatusColor(file.status) }}>
-                  {file.path}
-                </span>
-              </div>
-            ))}
-          </div>
-        </div>
+        {renderFileList("staged", stagedFiles)}
       </div>
       {contextMenu && (
         <div
@@ -396,32 +592,39 @@ export function StageView({ repoPath, onStash }: StageViewProps) {
           {contextMenu.staged ? (
             <div
               className="context-menu-item"
-              onClick={() => handleUnstageFile(contextMenu.file)}
+              onClick={() => void unstageFiles(contextSelection)}
             >
-              Unstage {contextMenu.file}
+              {contextSelection.length > 1
+                ? `Unstage ${contextSelection.length} Files`
+                : `Unstage ${contextMenu.file}`}
             </div>
           ) : (
             <>
               <div
                 className="context-menu-item"
-                onClick={() => handleStageFile(contextMenu.file)}
+                onClick={() => void stageFiles(contextSelection)}
               >
-                Stage {contextMenu.file}
+                {contextSelection.length > 1
+                  ? `Stage ${contextSelection.length} Files`
+                  : `Stage ${contextMenu.file}`}
               </div>
-              {contextMenu.status === "modified" && (
+              {contextSelection.length === 1 &&
+                contextMenu.status === "modified" && (
+                  <div
+                    className="context-menu-item"
+                    onClick={() => handleDiscardChanges(contextMenu.file)}
+                  >
+                    Discard changes to {contextMenu.file}
+                  </div>
+                )}
+              {contextSelection.length === 1 && (
                 <div
                   className="context-menu-item"
-                  onClick={() => handleDiscardChanges(contextMenu.file)}
+                  onClick={() => handleIgnoreFile(contextMenu.file)}
                 >
-                  Discard changes to {contextMenu.file}
+                  Ignore {contextMenu.file}
                 </div>
               )}
-              <div
-                className="context-menu-item"
-                onClick={() => handleIgnoreFile(contextMenu.file)}
-              >
-                Ignore {contextMenu.file}
-              </div>
             </>
           )}
         </div>

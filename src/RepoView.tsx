@@ -150,6 +150,36 @@ function RepoView({ repoPath }: RepoViewProps) {
     [key: string]: boolean;
   }>({});
 
+  // GitX parity: Ctrl/Cmd+1 = History, Ctrl/Cmd+2 = Stage
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (!(e.metaKey || e.ctrlKey) || e.altKey || e.shiftKey) return;
+
+      const isHistory = e.key === "1" || e.code === "Digit1";
+      const isStage = e.key === "2" || e.code === "Digit2";
+      if (!isHistory && !isStage) return;
+
+      e.preventDefault();
+      e.stopPropagation();
+
+      if (isStage) {
+        setCurrentView("stage");
+        return;
+      }
+
+      // History view — keep prior branch selection, else fall back to HEAD
+      setCurrentView(null);
+      setSelectedBranch((prev) => {
+        if (prev) return prev;
+        const head = branches.find((b) => b.is_head);
+        return head?.name ?? prev;
+      });
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [branches]);
+
   const loadBranches = useCallback(async () => {
     try {
       const branchList = await invoke<GitBranch[]>("get_branches", {

@@ -3,6 +3,13 @@ import { invoke } from "@tauri-apps/api/core";
 import { open } from "@tauri-apps/plugin-dialog";
 import "./Launcher.css";
 
+interface CliStatus {
+  supported: boolean;
+  install_path: string | null;
+  installed_at: string | null;
+  outdated: boolean;
+}
+
 interface RecentRepo {
   path: string;
   name: string;
@@ -14,10 +21,28 @@ function Launcher() {
   const [cloneUrl, setCloneUrl] = useState("");
   const [clonePath, setClonePath] = useState("");
   const [isCloning, setIsCloning] = useState(false);
+  const [cliStatus, setCliStatus] = useState<CliStatus | null>(null);
+  const [cliMessage, setCliMessage] = useState<string | null>(null);
+  const [isInstallingCli, setIsInstallingCli] = useState(false);
 
   useEffect(() => {
     loadRecentRepos();
+    invoke<CliStatus>("cli_install_status")
+      .then(setCliStatus)
+      .catch((error) => console.error("Failed to get CLI status:", error));
   }, []);
+
+  const installCli = async () => {
+    setIsInstallingCli(true);
+    try {
+      setCliMessage(await invoke<string>("install_cli"));
+      setCliStatus(await invoke<CliStatus>("cli_install_status"));
+    } catch (error) {
+      setCliMessage(`${error}`);
+    } finally {
+      setIsInstallingCli(false);
+    }
+  };
 
   const loadRecentRepos = () => {
     const stored = localStorage.getItem("gitx-tauri-recent-repos");
@@ -220,6 +245,28 @@ function Launcher() {
           </div>
         </div>
       </div>
+
+      {/* One-time setup, so keep it out of the way and hide it once done. */}
+      {cliStatus?.supported &&
+        (!cliStatus.installed_at || cliStatus.outdated || cliMessage) && (
+          <div className="launcher-footer">
+            {cliMessage && <div>{cliMessage}</div>}
+            {(!cliStatus.installed_at || cliStatus.outdated) && (
+              <button
+                onClick={installCli}
+                disabled={isInstallingCli}
+                className="link-button"
+                title={`Adds gitx-tauri to ${cliStatus.install_path}`}
+              >
+                {isInstallingCli
+                  ? "Installing..."
+                  : cliStatus.outdated
+                    ? "Update command-line tool to this build"
+                    : "Install command-line tool"}
+              </button>
+            )}
+          </div>
+        )}
     </div>
   );
 }

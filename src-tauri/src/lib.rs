@@ -1,8 +1,9 @@
+mod cli_install;
 mod git_ops;
 
 use notify::{Config, RecommendedWatcher, RecursiveMode, Watcher};
 use std::collections::HashMap;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::sync::mpsc::channel;
 use std::sync::Mutex;
 use std::time::Duration;
@@ -472,12 +473,75 @@ fn open_repo_window(app: tauri::AppHandle, repo_path: String) -> Result<(), Stri
     Ok(())
 }
 
+/// Repo root to open from CLI args (`gitx-tauri [path]`), resolved against `cwd`.
+/// With no path, the cwd itself is used unless it is `/` or the home dir, so a
+/// desktop launch doesn't pick up e.g. a dotfiles repo in `$HOME`.
+fn cli_repo_root(app: &tauri::AppHandle, args: &[String], cwd: &Path) -> Option<String> {
+    let explicit = args.iter().skip(1).find(|a| !a.starts_with('-'));
+    let start = match explicit {
+        Some(arg) => cwd.join(arg),
+        None => {
+            let home = app.path().home_dir().ok();
+            if cwd.parent().is_none() || home.as_deref() == Some(cwd) {
+                return None;
+            }
+            cwd.to_path_buf()
+        }
+    };
+
+    match git2::Repository::discover(&start) {
+        Ok(repo) => {
+            let root: PathBuf = repo.workdir()?.to_path_buf();
+            let root = root.canonicalize().unwrap_or(root);
+            // No trailing slash, so the window label matches the launcher's.
+            Some(
+                root.to_string_lossy()
+                    .trim_end_matches(['/', '\\'])
+                    .to_string(),
+            )
+        }
+        Err(e) => {
+            if explicit.is_some() {
+                eprintln!(
+                    "gitx-tauri: not a git repository: {} ({e})",
+                    start.display()
+                );
+            }
+            None
+        }
+    }
+}
+
+fn open_cli_repo(app: &tauri::AppHandle, args: &[String], cwd: &Path) {
+    if let Some(root) = cli_repo_root(app, args, cwd) {
+        if let Err(e) = open_repo_window(app.clone(), root) {
+            eprintln!("gitx-tauri: failed to open repository window: {e}");
+        }
+    }
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
+        // Must be registered first. A second `gitx-tauri [path]` hands its
+        // args to the running instance instead of starting another app.
+        .plugin(tauri_plugin_single_instance::init(|app, args, cwd| {
+            if let Some(main) = app.get_webview_window("main") {
+                let _ = main.unminimize();
+                let _ = main.set_focus();
+            }
+            open_cli_repo(app, &args, Path::new(&cwd));
+        }))
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
         .manage(RepoWatchers::default())
+        .setup(|app| {
+            let args: Vec<String> = std::env::args().collect();
+            if let Ok(cwd) = std::env::current_dir() {
+                open_cli_repo(app.handle(), &args, &cwd);
+            }
+            Ok(())
+        })
         .on_window_event(|window, event| {
             if let tauri::WindowEvent::Destroyed = event {
                 window
@@ -493,6 +557,8 @@ pub fn run() {
             is_git_repository,
             open_repository,
             open_repo_window,
+            cli_install::cli_install_status,
+            cli_install::install_cli,
             get_branches,
             get_remotes,
             get_remote_branches,

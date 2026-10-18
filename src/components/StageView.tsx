@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
-import { listen } from "@tauri-apps/api/event";
+import { getCurrentWebviewWindow } from "@tauri-apps/api/webviewWindow";
 import { message } from "@tauri-apps/plugin-dialog";
 import { DiffView } from "./DiffView";
 import "./StageView.css";
@@ -93,7 +93,7 @@ export function StageView({ repoPath, onStash }: StageViewProps) {
   useEffect(() => {
     loadStatus();
 
-    const unlisten = listen("repo-changed", () => {
+    const unlisten = getCurrentWebviewWindow().listen("repo-changed", () => {
       loadStatus();
     });
 

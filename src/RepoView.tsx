@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
-import { listen } from "@tauri-apps/api/event";
+import { getCurrentWebviewWindow } from "@tauri-apps/api/webviewWindow";
 import { message, confirm } from "@tauri-apps/plugin-dialog";
 import { Panel, Group, Separator } from "react-resizable-panels";
 import { BranchTree } from "./components/BranchTree";
@@ -218,7 +218,7 @@ function RepoView({ repoPath }: RepoViewProps) {
     );
 
     // Listen for repo changes
-    const unlisten = listen("repo-changed", () => {
+    const unlisten = getCurrentWebviewWindow().listen("repo-changed", () => {
       loadBranches();
       loadRemotes();
       loadSubmodules();

@@ -1,8 +1,10 @@
 mod git_ops;
 
 use notify::{Config, RecommendedWatcher, RecursiveMode, Watcher};
+use std::collections::HashMap;
 use std::path::Path;
 use std::sync::mpsc::channel;
+use std::sync::Mutex;
 use std::time::Duration;
 use tauri::{Emitter, Manager, WebviewUrl, WebviewWindowBuilder};
 
@@ -83,8 +85,17 @@ fn is_watch_noise(path: &Path) -> bool {
     })
 }
 
+/// One active watcher per window label. Dropping a watcher closes its event
+/// channel, which ends the matching emitter thread.
+#[derive(Default)]
+struct RepoWatchers(Mutex<HashMap<String, RecommendedWatcher>>);
+
 #[tauri::command]
-fn watch_repo(window: tauri::Window, repo_path: String) -> Result<(), String> {
+fn watch_repo(
+    window: tauri::Window,
+    watchers: tauri::State<RepoWatchers>,
+    repo_path: String,
+) -> Result<(), String> {
     let (tx, rx) = channel::<notify::Event>();
 
     let mut watcher = RecommendedWatcher::new(
@@ -109,8 +120,9 @@ fn watch_repo(window: tauri::Window, repo_path: String) -> Result<(), String> {
         .watch(Path::new(&repo_path), RecursiveMode::Recursive)
         .map_err(|e| e.to_string())?;
 
+    let label = window.label().to_string();
+
     std::thread::spawn(move || {
-        let _watcher = watcher;
         while let Ok(first) = rx.recv() {
             // Coalesce bursts of events (e.g. a checkout touching many files)
             // into a single refresh instead of one per fs event.
@@ -124,9 +136,14 @@ fn watch_repo(window: tauri::Window, repo_path: String) -> Result<(), String> {
                 batch[0].kind,
                 batch[0].paths
             );
-            let _ = window.emit("repo-changed", ());
+            // Window::emit broadcasts to every window; target only the one
+            // that owns this watcher.
+            let _ = window.emit_to(window.label(), "repo-changed", ());
         }
     });
+
+    // Replacing an existing entry drops the previous watcher (e.g. on remount).
+    watchers.0.lock().unwrap().insert(label, watcher);
 
     Ok(())
 }
@@ -460,6 +477,17 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
+        .manage(RepoWatchers::default())
+        .on_window_event(|window, event| {
+            if let tauri::WindowEvent::Destroyed = event {
+                window
+                    .state::<RepoWatchers>()
+                    .0
+                    .lock()
+                    .unwrap()
+                    .remove(window.label());
+            }
+        })
         .invoke_handler(tauri::generate_handler![
             clone_repository,
             is_git_repository,

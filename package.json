@@ -12,23 +12,22 @@
     "format": "prettier --write \"src/**/*.{ts,tsx,css}\""
   },
   "dependencies": {
-    "@tauri-apps/api": "^2.11.1",
-    "@tauri-apps/plugin-dialog": "^2.7.2",
-    "@tauri-apps/plugin-opener": "^2.5.4",
-    "pnpm": "^11.17.0",
-    "react": "^19.2.8",
-    "react-dom": "^19.2.8",
-    "react-resizable-panels": "^4.12.2"
+    "@tauri-apps/api": "^2.12.4",
+    "@tauri-apps/plugin-dialog": "^2.8.3",
+    "@tauri-apps/plugin-opener": "^2.7.2",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1",
+    "react-resizable-panels": "^4.14.5"
   },
   "devDependencies": {
-    "@tauri-apps/cli": "^2.11.4",
-    "@types/react": "^19.2.17",
-    "@types/react-dom": "^19.2.3",
-    "@vitejs/plugin-react": "^6.0.4",
-    "oxlint": "^1.76.0",
-    "prettier": "^3.9.6",
+    "@tauri-apps/cli": "^2.12.3",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "@vitejs/plugin-react": "^6.1.2",
+    "oxlint": "^1.88.0",
+    "prettier": "^3.9.10",
     "typescript": "~7.0.2",
-    "vite": "^8.1.5"
+    "vite": "^8.3.4"
   },
-  "packageManager": "pnpm@11.17.0+sha512.cca3cea332ad254bb84145f966d19f4879615210346fc92c79a047f23a0d7b3cca3c3792f0076ba1f1831d277efbcf0a9119b31a9a60eca7fb3d6231f331ef72"
+  "packageManager": "pnpm@12.3.4"
 }

@@ -28,3 +28,8 @@ tokio = { version = "1", features = ["rt-multi-thread"] }
 urlencoding = "2"
 notify = "6"
 
+[profile.dev]
+debug = "line-tables-only"
+incremental = true
+codegen-units = 256
+

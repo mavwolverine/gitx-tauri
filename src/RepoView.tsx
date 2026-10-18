@@ -138,7 +138,9 @@ function RepoView({ repoPath }: RepoViewProps) {
       setTimeout(() => setStatusMessage(""), duration);
     }
   };
-  const [currentView, setCurrentView] = useState<"stage" | null>("stage");
+  const [currentView, setCurrentView] = useState<"stage" | null>(null);
+  // Pick the initial view only on the first branch load, not on watcher refreshes.
+  const initialViewChosen = useRef(false);
   const [collapsed, setCollapsed] = useState({
     branches: false,
     remotes: false,
@@ -156,8 +158,22 @@ function RepoView({ repoPath }: RepoViewProps) {
         path: repoPath,
       });
       setBranches(branchList);
+      if (!initialViewChosen.current) {
+        initialViewChosen.current = true;
+        const head = branchList.find((b) => b.is_head);
+        if (head) {
+          setSelectedBranch(head.name);
+        } else {
+          // Detached HEAD or unborn branch: nothing to show history for.
+          setCurrentView("stage");
+        }
+      }
     } catch (error) {
       console.error("Failed to load branches:", error);
+      if (!initialViewChosen.current) {
+        initialViewChosen.current = true;
+        setCurrentView("stage");
+      }
     }
   }, [repoPath]);
 

@@ -7,7 +7,7 @@ import { BranchTree } from "./components/BranchTree";
 import { StageView } from "./components/StageView";
 import { CommitHistory, GitCommit } from "./components/CommitHistory";
 import { CommitTreeView, TreeNode } from "./components/CommitTreeView";
-import { FileViewer } from "./components/FileViewer";
+import { FileViewer, FileViewerTab } from "./components/FileViewer";
 import {
   DeleteBranchDialog,
   BranchDeleteInfo,
@@ -94,6 +94,7 @@ function RepoView({ repoPath }: RepoViewProps) {
   const [selectedTreeFile, setSelectedTreeFile] = useState<TreeNode | null>(
     null
   );
+  const [fileViewerTab, setFileViewerTab] = useState<FileViewerTab>("source");
   const [jumpTarget, setJumpTarget] = useState<{
     id: string;
     nonce: number;
@@ -968,6 +969,8 @@ function RepoView({ repoPath }: RepoViewProps) {
                         repoPath={repoPath}
                         commitId={selectedCommit.id}
                         file={selectedTreeFile}
+                        activeTab={fileViewerTab}
+                        onTabChange={setFileViewerTab}
                         onJumpToCommit={handleJumpToCommit}
                       />
                     </Panel>

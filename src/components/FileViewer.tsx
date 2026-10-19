@@ -7,6 +7,9 @@ interface FileViewerProps {
   repoPath: string;
   commitId: string;
   file: TreeNode | null;
+  // Owned by the parent so the tab survives switching files (#3).
+  activeTab: FileViewerTab;
+  onTabChange: (tab: FileViewerTab) => void;
   onJumpToCommit: (commitId: string) => void;
 }
 
@@ -36,7 +39,7 @@ interface FileHistoryEntry {
   author: GitAuthor;
 }
 
-type Tab = "source" | "blame" | "history";
+export type FileViewerTab = "source" | "blame" | "history";
 
 interface BlameGroup {
   commit_id: string;
@@ -80,9 +83,10 @@ export function FileViewer({
   repoPath,
   commitId,
   file,
+  activeTab,
+  onTabChange,
   onJumpToCommit,
 }: FileViewerProps) {
-  const [activeTab, setActiveTab] = useState<Tab>("source");
   // Each view keeps showing the previous commit's data until the new data
   // arrives, so the scroll container isn't emptied and its scroll position
   // survives switching commits.
@@ -179,19 +183,19 @@ export function FileViewer({
           <div className="filter-btn-group">
             <button
               className={`filter-btn ${activeTab === "source" ? "active" : ""}`}
-              onClick={() => setActiveTab("source")}
+              onClick={() => onTabChange("source")}
             >
               Source
             </button>
             <button
               className={`filter-btn ${activeTab === "blame" ? "active" : ""}`}
-              onClick={() => setActiveTab("blame")}
+              onClick={() => onTabChange("blame")}
             >
               Blame
             </button>
             <button
               className={`filter-btn ${activeTab === "history" ? "active" : ""}`}
-              onClick={() => setActiveTab("history")}
+              onClick={() => onTabChange("history")}
             >
               History
             </button>

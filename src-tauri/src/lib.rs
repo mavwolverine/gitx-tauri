@@ -1,3 +1,5 @@
+#[cfg(target_os = "linux")]
+mod appimage_desktop;
 mod cli_install;
 mod git_ops;
 
@@ -536,6 +538,8 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .manage(RepoWatchers::default())
         .setup(|app| {
+            #[cfg(target_os = "linux")]
+            appimage_desktop::integrate();
             let args: Vec<String> = std::env::args().collect();
             if let Ok(cwd) = std::env::current_dir() {
                 open_cli_repo(app.handle(), &args, &cwd);

@@ -452,7 +452,7 @@ fn open_repo_window(app: tauri::AppHandle, repo_path: String) -> Result<(), Stri
     let branch_name = match git_ops::open_repository(&repo_path) {
         Ok(repo) => {
             if repo.head_detached().unwrap_or(false) {
-                "HEAD (detached)".to_string()
+                git_ops::DETACHED_HEAD_NAME.to_string()
             } else if let Ok(head) = repo.head() {
                 head.shorthand().unwrap_or("unknown").to_string()
             } else {

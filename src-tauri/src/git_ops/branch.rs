@@ -9,6 +9,9 @@ pub struct GitBranch {
     pub is_remote: bool,
 }
 
+/// Sidebar entry shown for a detached HEAD; resolves to the HEAD commit.
+pub const DETACHED_HEAD_NAME: &str = "HEAD (detached)";
+
 pub fn get_branches(repo: &Repository) -> Result<Vec<GitBranch>, git2::Error> {
     let mut branches = Vec::new();
     let is_detached = repo.head_detached()?;
@@ -18,7 +21,7 @@ pub fn get_branches(repo: &Repository) -> Result<Vec<GitBranch>, git2::Error> {
     // Add detached HEAD as a special branch if applicable
     if is_detached {
         branches.push(GitBranch {
-            name: "HEAD (detached)".to_string(),
+            name: DETACHED_HEAD_NAME.to_string(),
             is_head: true,
             is_remote: false,
         });
@@ -39,6 +42,10 @@ pub fn get_branches(repo: &Repository) -> Result<Vec<GitBranch>, git2::Error> {
 }
 
 pub fn get_branch_head(repo: &Repository, branch_name: &str) -> Result<String, git2::Error> {
+    if branch_name == DETACHED_HEAD_NAME {
+        return Ok(repo.head()?.peel_to_commit()?.id().to_string());
+    }
+
     // Try local branch first
     if let Ok(branch) = repo.find_branch(branch_name, git2::BranchType::Local) {
         let commit = branch.get().peel_to_commit()?;

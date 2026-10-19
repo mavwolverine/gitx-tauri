@@ -112,8 +112,10 @@ pub fn get_commits(
 
     // If specific branch requested, only walk from that branch
     if let Some(branch) = branch_name {
-        // Try local branch first
-        if let Ok(b) = repo.find_branch(branch, git2::BranchType::Local) {
+        if branch == super::branch::DETACHED_HEAD_NAME {
+            revwalk.push(repo.head()?.peel_to_commit()?.id())?;
+        } else if let Ok(b) = repo.find_branch(branch, git2::BranchType::Local) {
+            // Local branch first
             if let Some(target) = b.get().target() {
                 revwalk.push(target)?;
             }

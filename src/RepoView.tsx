@@ -962,7 +962,9 @@ function RepoView({ repoPath }: RepoViewProps) {
                     <Separator className="resize-handle-vertical" />
                     <Panel defaultSize={70} minSize={30}>
                       <FileViewer
-                        key={`${selectedTreeFile?.path ?? "none"}:${selectedCommit.id}`}
+                        // Keyed by file only: remounting on commit change
+                        // would reset scroll position and tab (#1).
+                        key={selectedTreeFile?.path ?? "none"}
                         repoPath={repoPath}
                         commitId={selectedCommit.id}
                         file={selectedTreeFile}

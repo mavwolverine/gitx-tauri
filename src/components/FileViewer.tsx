@@ -83,61 +83,89 @@ export function FileViewer({
   onJumpToCommit,
 }: FileViewerProps) {
   const [activeTab, setActiveTab] = useState<Tab>("source");
+  // Each view keeps showing the previous commit's data until the new data
+  // arrives, so the scroll container isn't emptied and its scroll position
+  // survives switching commits.
   const [content, setContent] = useState<FileContent | null>(null);
-  const [contentLoading, setContentLoading] = useState(false);
-  const [blame, setBlame] = useState<BlameLine[] | null>(null);
-  const [blameLoading, setBlameLoading] = useState(false);
-  const [history, setHistory] = useState<FileHistoryEntry[] | null>(null);
-  const [historyLoading, setHistoryLoading] = useState(false);
+  const [contentFailed, setContentFailed] = useState(false);
+  const [blame, setBlame] = useState<{
+    commitId: string;
+    lines: BlameLine[];
+  } | null>(null);
+  const [history, setHistory] = useState<{
+    commitId: string;
+    entries: FileHistoryEntry[];
+  } | null>(null);
+
+  const filePath = file?.path;
+  const isBinary = content?.is_binary ?? false;
+  const blameCommitId = blame?.commitId;
+  const historyCommitId = history?.commitId;
 
   useEffect(() => {
-    if (!file) return;
-    setContentLoading(true);
+    if (!filePath) return;
+    // Ignore responses for a commit the user has already moved past.
+    let cancelled = false;
     invoke<FileContent>("get_file_content", {
       path: repoPath,
       commitId,
-      filePath: file.path,
+      filePath,
     })
-      .then(setContent)
+      .then((result) => {
+        if (cancelled) return;
+        setContent(result);
+        setContentFailed(false);
+      })
       .catch((error) => {
         console.error("Failed to load file content:", error);
-        setContent(null);
-      })
-      .finally(() => setContentLoading(false));
-  }, [file, repoPath, commitId]);
+        if (!cancelled) setContentFailed(true);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [filePath, repoPath, commitId]);
 
   useEffect(() => {
-    if (!file || activeTab !== "blame" || blame !== null) return;
-    if (content?.is_binary) return;
-    setBlameLoading(true);
+    if (!filePath || activeTab !== "blame" || isBinary) return;
+    if (blameCommitId === commitId) return;
+    let cancelled = false;
     invoke<BlameLine[]>("get_file_blame", {
       path: repoPath,
       commitId,
-      filePath: file.path,
+      filePath,
     })
-      .then(setBlame)
+      .then((lines) => {
+        if (!cancelled) setBlame({ commitId, lines });
+      })
       .catch((error) => {
         console.error("Failed to load blame:", error);
-        setBlame([]);
-      })
-      .finally(() => setBlameLoading(false));
-  }, [activeTab, file, repoPath, commitId, blame, content]);
+        if (!cancelled) setBlame({ commitId, lines: [] });
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [activeTab, filePath, repoPath, commitId, isBinary, blameCommitId]);
 
   useEffect(() => {
-    if (!file || activeTab !== "history" || history !== null) return;
-    setHistoryLoading(true);
+    if (!filePath || activeTab !== "history") return;
+    if (historyCommitId === commitId) return;
+    let cancelled = false;
     invoke<FileHistoryEntry[]>("get_file_history", {
       path: repoPath,
       commitId,
-      filePath: file.path,
+      filePath,
     })
-      .then(setHistory)
+      .then((entries) => {
+        if (!cancelled) setHistory({ commitId, entries });
+      })
       .catch((error) => {
         console.error("Failed to load file history:", error);
-        setHistory([]);
-      })
-      .finally(() => setHistoryLoading(false));
-  }, [activeTab, file, repoPath, commitId, history]);
+        if (!cancelled) setHistory({ commitId, entries: [] });
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [activeTab, filePath, repoPath, commitId, historyCommitId]);
 
   if (!file) {
     return <div className="no-selection">Select a file to view</div>;
@@ -172,7 +200,9 @@ export function FileViewer({
       </div>
       <div className="file-viewer-body">
         {activeTab === "source" &&
-          (contentLoading ? (
+          (contentFailed ? (
+            <div className="file-viewer-status">Failed to load file</div>
+          ) : content === null ? (
             <div className="file-viewer-status">Loading...</div>
           ) : content?.is_binary ? (
             <div className="file-viewer-status">
@@ -193,11 +223,11 @@ export function FileViewer({
             <div className="file-viewer-status">
               Binary file ({content.size} bytes)
             </div>
-          ) : blameLoading || blame === null ? (
+          ) : blame === null ? (
             <div className="file-viewer-status">Loading...</div>
           ) : (
             <div className="blame-view">
-              {groupBlameLines(blame).map((group) => (
+              {groupBlameLines(blame.lines).map((group) => (
                 <div key={group.lines[0].line_no} className="blame-group">
                   <div
                     className="blame-meta"
@@ -227,13 +257,13 @@ export function FileViewer({
             </div>
           ))}
         {activeTab === "history" &&
-          (historyLoading || history === null ? (
+          (history === null ? (
             <div className="file-viewer-status">Loading...</div>
-          ) : history.length === 0 ? (
+          ) : history.entries.length === 0 ? (
             <div className="file-viewer-status">No history found</div>
           ) : (
             <div className="file-history-list">
-              {history.map((entry) => (
+              {history.entries.map((entry) => (
                 <div
                   key={entry.id}
                   className="file-history-item"

@@ -142,6 +142,9 @@ function RepoView({ repoPath }: RepoViewProps) {
   const [currentView, setCurrentView] = useState<"stage" | null>(null);
   // Pick the initial view only on the first branch load, not on watcher refreshes.
   const initialViewChosen = useRef(false);
+  // While the user hasn't picked another branch, History follows the
+  // checked-out branch (e.g. after `git checkout` in a terminal).
+  const followHead = useRef(true);
   const [collapsed, setCollapsed] = useState({
     branches: false,
     remotes: false,
@@ -168,6 +171,9 @@ function RepoView({ repoPath }: RepoViewProps) {
           // Detached HEAD or unborn branch: nothing to show history for.
           setCurrentView("stage");
         }
+      } else if (followHead.current) {
+        const head = branchList.find((b) => b.is_head);
+        if (head) setSelectedBranch(head.name);
       }
     } catch (error) {
       console.error("Failed to load branches:", error);
@@ -706,6 +712,8 @@ function RepoView({ repoPath }: RepoViewProps) {
                       currentView === "stage" ? null : selectedBranch
                     }
                     onSelectBranch={(branch) => {
+                      followHead.current =
+                        branch === branches.find((b) => b.is_head)?.name;
                       setSelectedBranch(branch);
                       setCurrentView(null);
                     }}
@@ -756,6 +764,7 @@ function RepoView({ repoPath }: RepoViewProps) {
                               currentView === "stage" ? null : selectedBranch
                             }
                             onSelectBranch={(branch) => {
+                              followHead.current = false;
                               setSelectedBranch(`${remote.name}/${branch}`);
                               setCurrentView(null);
                             }}

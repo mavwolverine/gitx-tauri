@@ -16,7 +16,7 @@ pub fn get_branches(repo: &Repository) -> Result<Vec<GitBranch>, git2::Error> {
     let mut branches = Vec::new();
     let is_detached = repo.head_detached()?;
     let head = repo.head()?;
-    let head_name = head.shorthand();
+    let head_name = head.shorthand().ok();
 
     // Add detached HEAD as a special branch if applicable
     if is_detached {
@@ -128,7 +128,7 @@ pub fn get_branch_delete_info(
     repo.find_branch(branch_name, git2::BranchType::Local)?;
 
     let mut remote_names = Vec::new();
-    for remote in repo.remotes()?.iter().flatten() {
+    for remote in repo.remotes()?.iter().flatten().flatten() {
         let remote_branch = format!("{}/{}", remote, branch_name);
         if repo
             .find_branch(&remote_branch, git2::BranchType::Remote)

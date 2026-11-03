@@ -13,7 +13,7 @@ pub fn get_status(repo: &Repository) -> Result<Vec<GitFileStatus>, git2::Error> 
     let statuses = repo.statuses(None)?;
 
     for entry in statuses.iter() {
-        if let Some(path) = entry.path() {
+        if let Ok(path) = entry.path() {
             let status = entry.status();
 
             // Check if file is staged (in index)
@@ -67,7 +67,7 @@ pub fn get_diff(repo: &Repository, path: &str, staged: bool) -> Result<String, g
     let mut is_untracked = false;
 
     for entry in statuses.iter() {
-        if entry.path() == Some(path) && entry.status().is_wt_new() {
+        if entry.path().ok() == Some(path) && entry.status().is_wt_new() {
             is_untracked = true;
             break;
         }

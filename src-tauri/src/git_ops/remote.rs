@@ -10,9 +10,10 @@ pub struct GitRemote {
 pub fn get_remotes(repo: &Repository) -> Result<Vec<GitRemote>, git2::Error> {
     let mut remotes = Vec::new();
 
-    for name in repo.remotes()?.iter().flatten() {
+    for name in repo.remotes()?.iter().flatten().flatten() {
         if let Ok(remote) = repo.find_remote(name) {
-            if let Some(url) = remote.url() {
+            // A remote without a URL comes back as "" and is skipped, as before.
+            if let Some(url) = remote.url().ok().filter(|u| !u.is_empty()) {
                 remotes.push(GitRemote {
                     name: name.to_string(),
                     url: url.to_string(),

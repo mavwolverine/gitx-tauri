@@ -9,6 +9,8 @@ mod stage;
 mod stash;
 mod submodule;
 mod tag;
+#[cfg(test)]
+mod tests;
 
 pub use branch::*;
 pub use cherry_pick::*;

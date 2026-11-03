@@ -7,6 +7,8 @@ export interface TreeNode {
   is_dir: boolean;
   oid: string;
   children?: TreeNode[] | null;
+  /** A submodule: the tree pins a commit of another repo, not a file. */
+  is_submodule?: boolean;
 }
 
 interface CommitTreeViewProps {
@@ -48,6 +50,22 @@ function TreeRow({ node, depth, selectedPath, onSelectFile }: TreeRowProps) {
               onSelectFile={onSelectFile}
             />
           ))}
+      </div>
+    );
+  }
+
+  if (node.is_submodule) {
+    return (
+      <div
+        className="branch-item"
+        style={{ paddingLeft: `${indent}px`, opacity: 0.7, cursor: "default" }}
+        title={`Submodule, pinned at ${node.oid}`}
+      >
+        <span className="folder-icon" style={{ visibility: "hidden" }}>
+          ▼
+        </span>
+        <span className="item-icon">🔗</span>
+        {node.name} (submodule)
       </div>
     );
   }

@@ -38,10 +38,32 @@ export function StageView({ repoPath, onStash }: StageViewProps) {
 
   const getStatusPriority = (status: string) => {
     const s = status[0].toUpperCase();
+    if (s === "C") return 3; // conflicted files need attention first
     if (s === "D") return 2;
     if (s === "M") return 1;
     return 0;
   };
+
+  // Only the newest diff request may update the pane, so a slow answer for a
+  // file the user has since left can't overwrite the current one.
+  const diffRequest = useRef(0);
+  const loadDiff = useCallback(
+    async (filePath: string, staged: boolean) => {
+      const request = ++diffRequest.current;
+      try {
+        const diffText = await invoke<string>("get_diff", {
+          path: repoPath,
+          filePath,
+          staged,
+        });
+        if (request === diffRequest.current) setDiff(diffText);
+      } catch (error) {
+        console.error("Failed to load diff:", error);
+        if (request === diffRequest.current) setDiff("");
+      }
+    },
+    [repoPath]
+  );
 
   const loadStatus = useCallback(async () => {
     try {
@@ -67,14 +89,11 @@ export function StageView({ repoPath, onStash }: StageViewProps) {
         const fileExists = selectedStagedRef.current
           ? staged.some((f) => f.path === currentSelectedFile)
           : unstaged.some((f) => f.path === currentSelectedFile);
-        console.log("Check file exists:", {
-          selectedFile: currentSelectedFile,
-          selectedStaged: selectedStagedRef.current,
-          fileExists,
-          stagedCount: staged.length,
-          unstagedCount: unstaged.length,
-        });
-        if (!fileExists) {
+        if (fileExists) {
+          // The file may have changed on disk: keep the open diff in step so
+          // hunk actions never work from stale text.
+          loadDiff(currentSelectedFile, selectedStagedRef.current);
+        } else {
           setSelectedFile(null);
           setDiff("");
         }
@@ -88,7 +107,7 @@ export function StageView({ repoPath, onStash }: StageViewProps) {
     } catch (error) {
       console.error("Failed to load status:", error);
     }
-  }, [repoPath]);
+  }, [repoPath, loadDiff]);
 
   useEffect(() => {
     loadStatus();
@@ -107,20 +126,6 @@ export function StageView({ repoPath, onStash }: StageViewProps) {
     window.addEventListener("click", handleClick);
     return () => window.removeEventListener("click", handleClick);
   }, []);
-
-  const loadDiff = async (filePath: string, staged: boolean) => {
-    try {
-      const diffText = await invoke<string>("get_diff", {
-        path: repoPath,
-        filePath,
-        staged,
-      });
-      setDiff(diffText);
-    } catch (error) {
-      console.error("Failed to load diff:", error);
-      setDiff("");
-    }
-  };
 
   const handleFileSelect = (filePath: string, staged: boolean) => {
     setSelectedFile(filePath);
@@ -177,6 +182,7 @@ export function StageView({ repoPath, onStash }: StageViewProps) {
       loadStatus();
       loadDiff(selectedFile, selectedStaged);
     } catch (error) {
+      loadDiff(selectedFile, selectedStaged);
       await message(
         `Failed to ${selectedStaged ? "unstage" : "stage"} hunk: ${error}`,
         {
@@ -240,10 +246,25 @@ export function StageView({ repoPath, onStash }: StageViewProps) {
       loadStatus();
       loadDiff(selectedFile, selectedStaged);
     } catch (error) {
+      loadDiff(selectedFile, selectedStaged);
       await message(`Failed to discard hunk: ${error}`, {
         title: "Error",
         kind: "error",
       });
+    }
+  };
+
+  const handleAmendToggle = async (checked: boolean) => {
+    setAmend(checked);
+    if (checked && commitMessage.trim() === "") {
+      try {
+        const headMessage = await invoke<string>("get_head_message", {
+          path: repoPath,
+        });
+        setCommitMessage(headMessage.trimEnd());
+      } catch (error) {
+        console.error("Failed to load the last commit message:", error);
+      }
     }
   };
 
@@ -270,6 +291,8 @@ export function StageView({ repoPath, onStash }: StageViewProps) {
     if (s === "M") return "#4ade80";
     if (s === "A") return "#60a5fa";
     if (s === "D") return "#f87171";
+    if (s === "C") return "#fbbf24"; // conflicted
+    if (s === "T") return "#c084fc"; // type changed
     return "#9ca3af";
   };
 
@@ -287,6 +310,11 @@ export function StageView({ repoPath, onStash }: StageViewProps) {
                 diff={diff}
                 filename={selectedFile}
                 actionLabel={selectedStaged ? "Unstage" : "Stage"}
+                showActions={
+                  !(selectedStaged ? stagedFiles : unstagedFiles).some(
+                    (f) => f.path === selectedFile && f.status === "conflicted"
+                  )
+                }
                 onDiscard={selectedStaged ? undefined : handleDiscardHunk}
                 onStage={handleStageHunk}
               />
@@ -347,14 +375,15 @@ export function StageView({ repoPath, onStash }: StageViewProps) {
                   <input
                     type="checkbox"
                     checked={amend}
-                    onChange={(e) => setAmend(e.target.checked)}
+                    onChange={(e) => handleAmendToggle(e.target.checked)}
                   />
                   Amend
                 </label>
                 <button
                   className="commit-button"
                   disabled={
-                    stagedFiles.length === 0 || commitMessage.trim() === ""
+                    (stagedFiles.length === 0 && !amend) ||
+                    commitMessage.trim() === ""
                   }
                   onClick={handleCommit}
                 >
@@ -408,7 +437,9 @@ export function StageView({ repoPath, onStash }: StageViewProps) {
               >
                 Stage {contextMenu.file}
               </div>
-              {contextMenu.status === "modified" && (
+              {["modified", "deleted", "typechange"].includes(
+                contextMenu.status
+              ) && (
                 <div
                   className="context-menu-item"
                   onClick={() => handleDiscardChanges(contextMenu.file)}

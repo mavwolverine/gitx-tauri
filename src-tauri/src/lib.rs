@@ -6,8 +6,9 @@ mod git_ops;
 use notify::{Config, RecommendedWatcher, RecursiveMode, Watcher};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{channel, Receiver};
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 use tauri::{Emitter, Manager, WebviewUrl, WebviewWindowBuilder};
 
@@ -185,10 +186,16 @@ fn collect_batch(
     batch
 }
 
-/// One active watcher per window label. Dropping a watcher closes its event
-/// channel, which ends the matching emitter thread.
+/// A repo being watched for one window.
+struct WatchedRepo {
+    /// Dropping it closes its event channel, which ends the emitter thread.
+    _watcher: RecommendedWatcher,
+    path: String,
+}
+
+/// One active watcher per window label.
 #[derive(Default)]
-struct RepoWatchers(Mutex<HashMap<String, RecommendedWatcher>>);
+struct RepoWatchers(Mutex<HashMap<String, WatchedRepo>>);
 
 /// When each window last got a `repo-changed`, so the focus-triggered refresh
 /// doesn't pile on top of one that just happened.
@@ -216,6 +223,17 @@ impl LastRefresh {
     }
 }
 
+/// Tells the window its repo changed: the title follows the current branch and
+/// the UI reloads.
+fn notify_repo_changed(window: &tauri::Window, repo_path: &str) {
+    let title = repo_window_title(repo_path);
+    if window.title().map(|t| t != title).unwrap_or(true) {
+        let _ = window.set_title(&title);
+    }
+    let _ = window.emit_to(window.label(), "repo-changed", ());
+    window.state::<LastRefresh>().touch(window.label());
+}
+
 #[tauri::command]
 fn watch_repo(
     window: tauri::Window,
@@ -225,6 +243,9 @@ fn watch_repo(
     let (tx, rx) = channel::<notify::Event>();
     let roots = watch_roots(Path::new(&repo_path));
     let filter_roots = roots.clone();
+    // Tell the UI once if the watcher starts failing, instead of going quiet.
+    let error_window = window.clone();
+    let warned = Arc::new(AtomicBool::new(false));
 
     let mut watcher = RecommendedWatcher::new(
         move |res: Result<notify::Event, notify::Error>| match res {
@@ -247,6 +268,13 @@ fn watch_repo(
             }
             Err(e) => {
                 println!("[watch_repo] watcher error: {e}");
+                if !warned.swap(true, Ordering::Relaxed) {
+                    let _ = error_window.emit_to(
+                        error_window.label(),
+                        "repo-watch-error",
+                        e.to_string(),
+                    );
+                }
                 // Events may have been lost; refresh to be safe.
                 let _ = tx.send(notify::Event::new(notify::EventKind::Other));
             }
@@ -266,6 +294,7 @@ fn watch_repo(
 
     let label = window.label().to_string();
     window.state::<LastRefresh>().touch(&label);
+    let thread_repo_path = repo_path.clone();
 
     std::thread::spawn(move || {
         while let Ok(first) = rx.recv() {
@@ -278,15 +307,19 @@ fn watch_repo(
                 batch[0].kind,
                 batch[0].paths
             );
-            // Window::emit broadcasts to every window; target only the one
-            // that owns this watcher.
-            let _ = window.emit_to(window.label(), "repo-changed", ());
-            window.state::<LastRefresh>().touch(window.label());
+            // Emits to this window only (Window::emit would broadcast).
+            notify_repo_changed(&window, &thread_repo_path);
         }
     });
 
     // Replacing an existing entry drops the previous watcher (e.g. on remount).
-    watchers.0.lock().unwrap().insert(label, watcher);
+    watchers.0.lock().unwrap().insert(
+        label,
+        WatchedRepo {
+            _watcher: watcher,
+            path: repo_path,
+        },
+    );
 
     Ok(())
 }
@@ -366,10 +399,21 @@ fn ignore_file(path: String, file_path: String) -> Result<(), String> {
     git_ops::ignore_file(&repo, &file_path).map_err(|e| e.to_string())
 }
 
+// Hooks (linters, tests, signing) can take a while, so don't commit on the main thread.
 #[tauri::command]
-fn create_commit(path: String, message: String, amend: bool) -> Result<String, String> {
+async fn create_commit(path: String, message: String, amend: bool) -> Result<String, String> {
+    tokio::task::spawn_blocking(move || {
+        let repo = git_ops::open_repository(&path).map_err(|e| e.to_string())?;
+        git_ops::create_commit(&repo, &message, amend).map_err(|e| e.to_string())
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
+#[tauri::command]
+fn get_head_message(path: String) -> Result<String, String> {
     let repo = git_ops::open_repository(&path).map_err(|e| e.to_string())?;
-    git_ops::create_commit(&repo, &message, amend).map_err(|e| e.to_string())
+    git_ops::get_head_message(&repo).map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -470,14 +514,19 @@ fn delete_local_branch(path: String, branch_name: String) -> Result<(), String> 
     git_ops::delete_local_branch(&repo, &branch_name).map_err(|e| e.to_string())
 }
 
+// A network call: keep it off the main thread like fetch/pull/push.
 #[tauri::command]
-fn delete_remote_branch(
+async fn delete_remote_branch(
     path: String,
     remote_name: String,
     branch_name: String,
 ) -> Result<(), String> {
-    let repo = git_ops::open_repository(&path).map_err(|e| e.to_string())?;
-    git_ops::delete_remote_branch(&repo, &remote_name, &branch_name).map_err(|e| e.to_string())
+    tokio::task::spawn_blocking(move || {
+        let repo = git_ops::open_repository(&path).map_err(|e| e.to_string())?;
+        git_ops::delete_remote_branch(&repo, &remote_name, &branch_name).map_err(|e| e.to_string())
+    })
+    .await
+    .map_err(|e| e.to_string())?
 }
 
 #[tauri::command]
@@ -575,9 +624,53 @@ fn get_file_history(
     git_ops::get_file_history(&repo, &commit_id, &file_path).map_err(|e| e.to_string())
 }
 
+/// A window label unique to the repo however its path is spelled (trailing
+/// slash, symlink). Mapping separators and spaces to '-' made distinct repos
+/// like `/a/b-c` and `/a b/c` share a window, so hash the resolved path.
+fn repo_window_label(repo_path: &str) -> String {
+    use std::hash::{Hash, Hasher};
+    let resolved = std::fs::canonicalize(repo_path).unwrap_or_else(|_| PathBuf::from(repo_path));
+    let mut hasher = std::collections::hash_map::DefaultHasher::new();
+    resolved.hash(&mut hasher);
+    format!("repo-{:016x}", hasher.finish())
+}
+
+fn current_branch_label(repo_path: &str) -> String {
+    let Ok(repo) = git_ops::open_repository(repo_path) else {
+        return "unknown".to_string();
+    };
+    if repo.head_detached().unwrap_or(false) {
+        return git_ops::DETACHED_HEAD_NAME.to_string();
+    }
+    let label = match repo.head() {
+        Ok(head) => head.shorthand().unwrap_or("unknown").to_string(),
+        // Before the first commit HEAD names a branch that doesn't exist yet.
+        Err(_) => repo
+            .find_reference("HEAD")
+            .ok()
+            .and_then(|h| h.symbolic_target().ok().flatten().map(str::to_string))
+            .map(|t| t.trim_start_matches("refs/heads/").to_string())
+            .unwrap_or_else(|| "unknown".to_string()),
+    };
+    label
+}
+
+fn repo_window_title(repo_path: &str) -> String {
+    let name = repo_path
+        .trim_end_matches(['/', '\\'])
+        .rsplit(['/', '\\'])
+        .next()
+        .unwrap_or(repo_path);
+    format!(
+        "GitX-Tauri - {} [{}]",
+        name,
+        current_branch_label(repo_path)
+    )
+}
+
 #[tauri::command]
 fn open_repo_window(app: tauri::AppHandle, repo_path: String) -> Result<(), String> {
-    let label = format!("repo-{}", repo_path.replace(['/', '\\', ':', ' '], "-"));
+    let label = repo_window_label(&repo_path);
 
     if let Some(window) = app.get_webview_window(&label) {
         window.set_focus().map_err(|e| e.to_string())?;
@@ -585,26 +678,7 @@ fn open_repo_window(app: tauri::AppHandle, repo_path: String) -> Result<(), Stri
     }
 
     let url = format!("/?path={}", urlencoding::encode(&repo_path));
-    let repo_name = repo_path
-        .split(['/', '\\'])
-        .next_back()
-        .unwrap_or(&repo_path);
-
-    // Get current branch name
-    let branch_name = match git_ops::open_repository(&repo_path) {
-        Ok(repo) => {
-            if repo.head_detached().unwrap_or(false) {
-                git_ops::DETACHED_HEAD_NAME.to_string()
-            } else if let Ok(head) = repo.head() {
-                head.shorthand().unwrap_or("unknown").to_string()
-            } else {
-                "unknown".to_string()
-            }
-        }
-        Err(_) => "unknown".to_string(),
-    };
-
-    let title = format!("GitX-Tauri - {} [{}]", repo_name, branch_name);
+    let title = repo_window_title(&repo_path);
 
     WebviewWindowBuilder::new(&app, &label, WebviewUrl::App(url.into()))
         .title(&title)
@@ -700,16 +774,20 @@ pub fn run() {
             // Safety net for changes the watcher can't see (filesystems
             // without inotify, an exhausted watch limit).
             tauri::WindowEvent::Focused(true) => {
-                let watching = window
+                let repo_path = window
                     .state::<RepoWatchers>()
                     .0
                     .lock()
                     .unwrap()
-                    .contains_key(window.label());
-                let last = window.state::<LastRefresh>();
-                if watching && last.due(window.label(), FOCUS_REFRESH_GAP) {
-                    last.touch(window.label());
-                    let _ = window.emit_to(window.label(), "repo-changed", ());
+                    .get(window.label())
+                    .map(|w| w.path.clone());
+                if let Some(repo_path) = repo_path {
+                    if window
+                        .state::<LastRefresh>()
+                        .due(window.label(), FOCUS_REFRESH_GAP)
+                    {
+                        notify_repo_changed(window, &repo_path);
+                    }
                 }
             }
             _ => {}
@@ -738,6 +816,7 @@ pub fn run() {
             discard_hunk,
             ignore_file,
             create_commit,
+            get_head_message,
             cherry_pick,
             is_ancestor_of_head,
             create_branch,
@@ -953,6 +1032,54 @@ mod watch_tests {
         assert!(!is_watch_noise(&main_git.join("refs/heads/build"), &roots));
         assert!(is_watch_noise(&main_git.join("objects/ab/cd"), &roots));
 
+        let _ = std::fs::remove_dir_all(&base);
+    }
+
+    #[test]
+    fn window_labels_tell_repos_apart_but_not_spellings() {
+        // These all used to map to the same label.
+        let labels = [
+            repo_window_label("/x/my-repo"),
+            repo_window_label("/x/my repo"),
+            repo_window_label("/x/my/repo"),
+        ];
+        assert!(labels[0] != labels[1] && labels[1] != labels[2] && labels[0] != labels[2]);
+        for label in &labels {
+            assert!(label.chars().all(|c| c.is_ascii_alphanumeric() || c == '-'));
+        }
+
+        // One repo, however its path is spelled.
+        let base = std::env::temp_dir().join(format!("gitx-label-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&base);
+        std::fs::create_dir_all(base.join("real")).unwrap();
+        std::os::unix::fs::symlink(base.join("real"), base.join("link")).unwrap();
+        let real = repo_window_label(base.join("real").to_str().unwrap());
+        assert_eq!(real, repo_window_label(base.join("link").to_str().unwrap()));
+        assert_eq!(
+            real,
+            repo_window_label(&format!("{}/", base.join("real").display()))
+        );
+        let _ = std::fs::remove_dir_all(&base);
+    }
+
+    #[test]
+    fn the_title_names_the_branch_even_before_the_first_commit() {
+        let base = std::env::temp_dir().join(format!("gitx-title-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&base);
+        std::fs::create_dir_all(&base).unwrap();
+        git(&base, &["init", "-q", "-b", "trunk"]);
+        let path = base.to_str().unwrap();
+        assert!(repo_window_title(path).ends_with("[trunk]"));
+
+        std::fs::write(base.join("a.txt"), "x\n").unwrap();
+        git(&base, &["add", "."]);
+        git(&base, &["commit", "-qm", "c1"]);
+        git(&base, &["checkout", "-qb", "other"]);
+        assert!(repo_window_title(path).ends_with("[other]"));
+
+        git(&base, &["checkout", "-q", "--detach"]);
+        assert!(repo_window_title(path).ends_with("[HEAD (detached)]"));
+        assert!(repo_window_title(&format!("{path}/")).starts_with("GitX-Tauri - gitx-title-"));
         let _ = std::fs::remove_dir_all(&base);
     }
 }

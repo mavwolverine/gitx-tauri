@@ -184,6 +184,38 @@ function RepoView({ repoPath }: RepoViewProps) {
     }
   }, [repoPath]);
 
+  const loadRemoteBranches = useCallback(
+    async (remoteName: string) => {
+      try {
+        const branches = await invoke<string[]>("get_remote_branches", {
+          path: repoPath,
+          remoteName,
+        });
+        setRemotes((prev) =>
+          prev.map((r) => (r.name === remoteName ? { ...r, branches } : r))
+        );
+      } catch (error) {
+        console.error("Failed to load remote branches:", error);
+      }
+    },
+    [repoPath]
+  );
+
+  const loadTags = useCallback(async () => {
+    try {
+      const tagList = await invoke<string[]>("get_tags", { path: repoPath });
+      setTags(tagList);
+    } catch (error) {
+      console.error("Failed to load tags:", error);
+    }
+  }, [repoPath]);
+
+  // Which remotes are expanded, readable from async callbacks.
+  const remoteCollapsedRef = useRef(remoteCollapsed);
+  useEffect(() => {
+    remoteCollapsedRef.current = remoteCollapsed;
+  }, [remoteCollapsed]);
+
   const loadRemotes = useCallback(async () => {
     try {
       const remoteList = await invoke<GitRemote[]>("get_remotes", {
@@ -194,16 +226,30 @@ function RepoView({ repoPath }: RepoViewProps) {
         (remote, index, self) =>
           index === self.findIndex((r) => r.name === remote.name)
       );
-      setRemotes(uniqueRemotes);
-      const initialCollapsed: { [key: string]: boolean } = {};
-      uniqueRemotes.forEach((remote) => {
-        initialCollapsed[remote.name] = true;
-      });
-      setRemoteCollapsed(initialCollapsed);
+      // Keep what the user has expanded and the branch lists already loaded;
+      // a refresh must not fold the sidebar.
+      setRemotes((prev) =>
+        uniqueRemotes.map((remote) => ({
+          ...remote,
+          branches: prev.find((r) => r.name === remote.name)?.branches,
+        }))
+      );
+      setRemoteCollapsed((prev) =>
+        Object.fromEntries(
+          uniqueRemotes.map((remote) => [
+            remote.name,
+            prev[remote.name] ?? true,
+          ])
+        )
+      );
+      // A fetch, push or prune may have changed the branches of an expanded remote.
+      uniqueRemotes
+        .filter((remote) => remoteCollapsedRef.current[remote.name] === false)
+        .forEach((remote) => loadRemoteBranches(remote.name));
     } catch (error) {
       console.error("Failed to load remotes:", error);
     }
-  }, [repoPath]);
+  }, [repoPath, loadRemoteBranches]);
 
   const loadSubmodules = useCallback(async () => {
     try {
@@ -234,47 +280,45 @@ function RepoView({ repoPath }: RepoViewProps) {
     loadRemotes();
     loadSubmodules();
     loadStashes();
+    loadTags();
 
     // Start watching the repo
-    invoke("watch_repo", { repoPath }).catch((error) =>
-      console.error("Failed to start watching repo:", error)
-    );
+    invoke("watch_repo", { repoPath }).catch((error) => {
+      console.error("Failed to start watching repo:", error);
+      showStatus(`Auto-refresh is unavailable: ${error}`, 10000);
+    });
+
+    const webview = getCurrentWebviewWindow();
 
     // Listen for repo changes
-    const unlisten = getCurrentWebviewWindow().listen("repo-changed", () => {
+    const unlisten = webview.listen("repo-changed", () => {
       loadBranches();
       loadRemotes();
       loadSubmodules();
       loadStashes();
+      loadTags();
     });
+
+    // The watcher reports once if it starts failing (e.g. out of file watches).
+    const unlistenWarning = webview.listen<string>("repo-watch-error", (e) =>
+      showStatus(
+        `Auto-refresh may miss changes (${e.payload}). Focus the window to refresh.`,
+        10000
+      )
+    );
 
     return () => {
       unlisten.then((fn) => fn());
+      unlistenWarning.then((fn) => fn());
     };
-  }, [repoPath, loadBranches, loadRemotes, loadSubmodules, loadStashes]);
-
-  const loadRemoteBranches = async (remoteName: string) => {
-    try {
-      const branches = await invoke<string[]>("get_remote_branches", {
-        path: repoPath,
-        remoteName,
-      });
-      setRemotes((prev) =>
-        prev.map((r) => (r.name === remoteName ? { ...r, branches } : r))
-      );
-    } catch (error) {
-      console.error("Failed to load remote branches:", error);
-    }
-  };
-
-  const loadTags = async () => {
-    try {
-      const tagList = await invoke<string[]>("get_tags", { path: repoPath });
-      setTags(tagList);
-    } catch (error) {
-      console.error("Failed to load tags:", error);
-    }
-  };
+  }, [
+    repoPath,
+    loadBranches,
+    loadRemotes,
+    loadSubmodules,
+    loadStashes,
+    loadTags,
+  ]);
 
   const handleCheckoutBranch = async (branchName: string) => {
     try {
@@ -932,6 +976,7 @@ function RepoView({ repoPath }: RepoViewProps) {
                   <CommitHistory
                     repoPath={repoPath}
                     onCommitSelect={handleCommitSelect}
+                    onNotice={(notice) => showStatus(notice, 6000)}
                     currentBranch={selectedBranch}
                     headBranchName={branches.find((b) => b.is_head)?.name}
                     jumpTarget={jumpTarget}

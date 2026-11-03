@@ -6,6 +6,8 @@ import "./CommitHistory.css";
 interface CommitHistoryProps {
   repoPath: string;
   onCommitSelect: (commit: GitCommit | null) => void;
+  /** Short message for the user, e.g. when a commit can't be found. */
+  onNotice?: (message: string) => void;
   currentBranch?: string;
   headBranchName?: string;
   jumpTarget?: { id: string; nonce: number } | null;
@@ -52,9 +54,13 @@ interface GraphLine {
   color: number;
 }
 
+/** How many commits each history list loads. */
+const COMMIT_LIMIT = 10000;
+
 export function CommitHistory({
   repoPath,
   onCommitSelect,
+  onNotice,
   currentBranch,
   headBranchName,
   jumpTarget,
@@ -95,6 +101,12 @@ export function CommitHistory({
   } | null>(null);
   const selectedCommitRef = useRef(selectedCommit);
   selectedCommitRef.current = selectedCommit;
+  // Read through a ref: callers usually pass a fresh function every render, which
+  // must not re-run the jump effect.
+  const onNoticeRef = useRef(onNotice);
+  useEffect(() => {
+    onNoticeRef.current = onNotice;
+  }, [onNotice]);
   const commitsRef = useRef(commits);
   commitsRef.current = commits;
   const branchFilterRef = useRef(branchFilter);
@@ -126,20 +138,20 @@ export function CommitHistory({
         const [allList, localList, currentList] = await Promise.all([
           invoke<GitCommit[]>("get_commits", {
             path: repoPath,
-            limit: 10000,
+            limit: COMMIT_LIMIT,
             localOnly: false,
             branchName: undefined,
           }),
           invoke<GitCommit[]>("get_commits", {
             path: repoPath,
-            limit: 10000,
+            limit: COMMIT_LIMIT,
             localOnly: true,
             branchName: undefined,
           }),
           currentBranch
             ? invoke<GitCommit[]>("get_commits", {
                 path: repoPath,
-                limit: 10000,
+                limit: COMMIT_LIMIT,
                 localOnly: false,
                 branchName: currentBranch,
               })
@@ -239,7 +251,11 @@ export function CommitHistory({
   useEffect(() => {
     if (!jumpTarget) return;
     const found = commitsRef.current.All.find((c) => c.id === jumpTarget.id);
-    if (found) {
+    if (!found) {
+      onNoticeRef.current?.(
+        `Commit ${jumpTarget.id.substring(0, 7)} isn't in the loaded history (the ${COMMIT_LIMIT.toLocaleString()} most recent commits).`
+      );
+    } else {
       if (branchFilterRef.current !== "All") setBranchFilter("All");
       setSelectedCommit(found);
       onCommitSelect(found);

@@ -14,8 +14,14 @@ pub const DETACHED_HEAD_NAME: &str = "HEAD (detached)";
 
 pub fn get_branches(repo: &Repository) -> Result<Vec<GitBranch>, git2::Error> {
     let mut branches = Vec::new();
+    // Before the first commit HEAD points at a branch that doesn't exist yet.
+    // There is nothing to list, which is not an error.
+    let head = match repo.head() {
+        Ok(head) => head,
+        Err(e) if e.code() == git2::ErrorCode::UnbornBranch => return Ok(branches),
+        Err(e) => return Err(e),
+    };
     let is_detached = repo.head_detached()?;
-    let head = repo.head()?;
     let head_name = head.shorthand().ok();
 
     // Add detached HEAD as a special branch if applicable
@@ -77,7 +83,19 @@ pub fn create_branch(
     from_branch: &str,
 ) -> Result<(), git2::Error> {
     let target_commit = resolve_commit_from_ref(repo, from_branch)?;
-    repo.branch(branch_name, &target_commit, false)?;
+    let mut branch = repo.branch(branch_name, &target_commit, false)?;
+
+    // Like `git branch <name> origin/foo`: a branch started from a remote
+    // branch tracks it, so pull/push and ahead/behind work.
+    let from_remote = repo
+        .find_branch(from_branch, git2::BranchType::Local)
+        .is_err()
+        && repo
+            .find_branch(from_branch, git2::BranchType::Remote)
+            .is_ok();
+    if from_remote {
+        let _ = branch.set_upstream(Some(from_branch));
+    }
     Ok(())
 }
 
@@ -86,7 +104,9 @@ pub fn checkout_branch(repo: &Repository, branch_name: &str) -> Result<(), git2:
 
     // Use git checkout with error handling
     let output = std::process::Command::new("git")
-        .args(["checkout", branch_name])
+        // The trailing `--` makes git read the name as a branch, not a path,
+        // when a file or folder has the same name.
+        .args(["checkout", branch_name, "--"])
         .current_dir(workdir)
         .output()
         .map_err(|e| git2::Error::from_str(&format!("Failed to run git checkout: {}", e)))?;

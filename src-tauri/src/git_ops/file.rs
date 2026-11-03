@@ -112,6 +112,17 @@ pub struct FileHistoryEntry {
     pub author: GitAuthor,
 }
 
+/// How many commits back a file's history is searched.
+const FILE_HISTORY_SCAN_LIMIT: usize = 100_000;
+
+/// What `path` is in `tree`: its object id and file mode, or None if absent.
+fn path_entry(tree: &git2::Tree, path: &Path) -> Option<(git2::Oid, i32)> {
+    tree.get_path(path).ok().map(|e| (e.id(), e.filemode()))
+}
+
+/// Commits that changed `file_path`, newest first, as `git log -- <path>`
+/// would list them: a commit counts when the file differs from *every* parent,
+/// so a merge that merely brought in an unchanged-on-one-side file is skipped.
 pub fn get_file_history(
     repo: &Repository,
     commit_id: &str,
@@ -128,22 +139,24 @@ pub fn get_file_history(
     let mut entries = Vec::new();
 
     for (i, oid) in revwalk.enumerate() {
-        if i >= 5000 {
+        if i >= FILE_HISTORY_SCAN_LIMIT {
             break;
         }
         let oid = oid?;
         let commit = repo.find_commit(oid)?;
-        let tree = commit.tree()?;
+        let here = path_entry(&commit.tree()?, path);
 
         let changed = if commit.parent_count() == 0 {
-            tree.get_path(path).is_ok()
+            here.is_some()
         } else {
-            let parent_tree = commit.parent(0)?.tree()?;
-            let mut diff_opts = git2::DiffOptions::new();
-            diff_opts.pathspec(file_path);
-            let diff =
-                repo.diff_tree_to_tree(Some(&parent_tree), Some(&tree), Some(&mut diff_opts))?;
-            diff.deltas().len() > 0
+            let mut differs_from_all = true;
+            for parent in commit.parents() {
+                if path_entry(&parent.tree()?, path) == here {
+                    differs_from_all = false;
+                    break;
+                }
+            }
+            differs_from_all
         };
 
         if changed {

@@ -1,7 +1,8 @@
 use super::branch::GitBranch;
-use super::common::resolve_author_signature;
 use git2::Repository;
 use serde::Serialize;
+use std::io::Write;
+use std::process::{Command, Stdio};
 
 #[derive(Debug, Serialize)]
 pub struct GitAuthor {
@@ -64,42 +65,57 @@ pub struct TreeNode {
     pub is_dir: bool,
     pub oid: String,
     pub children: Option<Vec<TreeNode>>,
+    /// A gitlink entry: the commit of a submodule, not a file.
+    pub is_submodule: bool,
 }
 
+/// Commits the index with the real `git commit`, so the result matches the
+/// command line: hooks run, `commit.gpgsign` is honored, an in-progress merge
+/// or cherry-pick is concluded (with all its parents), an amend keeps the
+/// original author, and an empty commit is refused.
 pub fn create_commit(repo: &Repository, message: &str, amend: bool) -> Result<String, git2::Error> {
-    let mut index = repo.index()?;
-    let tree_id = index.write_tree()?;
-    let tree = repo.find_tree(tree_id)?;
-    let signature = resolve_author_signature(repo)?;
+    let workdir = repo
+        .workdir()
+        .ok_or_else(|| git2::Error::from_str("Repository has no working directory"))?;
 
+    let mut cmd = Command::new("git");
+    cmd.current_dir(workdir).args(["commit", "-F", "-"]);
     if amend {
-        let head = repo.head()?;
-        let head_commit = head.peel_to_commit()?;
-        let new_oid = head_commit.amend(
-            Some("HEAD"),
-            Some(&signature),
-            Some(&signature),
-            None,
-            Some(message),
-            Some(&tree),
-        )?;
-        Ok(new_oid.to_string())
-    } else {
-        let parent_commit = match repo.head() {
-            Ok(head) => Some(head.peel_to_commit()?),
-            Err(_) => None,
-        };
-        let parents: Vec<&git2::Commit> = parent_commit.iter().collect();
-        let oid = repo.commit(
-            Some("HEAD"),
-            &signature,
-            &signature,
-            message,
-            &tree,
-            &parents,
-        )?;
-        Ok(oid.to_string())
+        cmd.arg("--amend");
     }
+    let output = cmd
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .and_then(|mut child| {
+            if let Some(mut stdin) = child.stdin.take() {
+                stdin.write_all(message.as_bytes())?;
+            }
+            child.wait_with_output()
+        })
+        .map_err(|e| git2::Error::from_str(&format!("Failed to run git commit: {}", e)))?;
+
+    if !output.status.success() {
+        // `git commit` reports "nothing to commit" on stdout, hook failures on
+        // stderr; show whichever has something to say.
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        let reason = if stderr.trim().is_empty() {
+            stdout
+        } else {
+            stderr
+        };
+        return Err(git2::Error::from_str(reason.trim()));
+    }
+
+    Ok(repo.head()?.peel_to_commit()?.id().to_string())
+}
+
+/// The message of the current HEAD commit, to pre-fill an amend.
+pub fn get_head_message(repo: &Repository) -> Result<String, git2::Error> {
+    let commit = repo.head()?.peel_to_commit()?;
+    Ok(String::from_utf8_lossy(commit.message_bytes()).into_owned())
 }
 
 pub fn get_commits(
@@ -109,6 +125,27 @@ pub fn get_commits(
     branch_name: Option<&str>,
 ) -> Result<Vec<GitCommit>, git2::Error> {
     let mut revwalk = repo.revwalk()?;
+
+    // Tags first: they are both walk starting points and badges.
+    let mut tag_map: std::collections::HashMap<git2::Oid, Vec<String>> =
+        std::collections::HashMap::new();
+    repo.tag_foreach(|oid, name| {
+        if let Ok(name_str) = std::str::from_utf8(name) {
+            if let Some(tag_name) = name_str.strip_prefix("refs/tags/") {
+                // Peel to the commit OID (handles both lightweight and annotated tags)
+                let target_oid = repo
+                    .find_object(oid, None)
+                    .and_then(|obj| obj.peel(git2::ObjectType::Commit))
+                    .map(|obj| obj.id())
+                    .unwrap_or(oid);
+                tag_map
+                    .entry(target_oid)
+                    .or_default()
+                    .push(tag_name.to_string());
+            }
+        }
+        true
+    })?;
 
     // If specific branch requested, only walk from that branch
     if let Some(branch) = branch_name {
@@ -147,6 +184,20 @@ pub fn get_commits(
                 revwalk.push(target)?;
             }
         }
+
+        // HEAD may be detached, in which case no branch leads to it. (Fails
+        // harmlessly before the first commit.)
+        let _ = revwalk.push_head();
+
+        // Like `git log --all`: commits only a tag points at still show up.
+        // Tags that don't peel to a commit are skipped.
+        if !local_only {
+            for oid in tag_map.keys() {
+                if repo.find_commit(*oid).is_ok() {
+                    revwalk.push(*oid)?;
+                }
+            }
+        }
     }
 
     // Like `git log --graph` (and GitX before it), only the most recent stash
@@ -182,27 +233,6 @@ pub fn get_commits(
             }
         }
     }
-
-    let mut tag_map: std::collections::HashMap<git2::Oid, Vec<String>> =
-        std::collections::HashMap::new();
-
-    repo.tag_foreach(|oid, name| {
-        if let Ok(name_str) = std::str::from_utf8(name) {
-            if let Some(tag_name) = name_str.strip_prefix("refs/tags/") {
-                // Peel to the commit OID (handles both lightweight and annotated tags)
-                let target_oid = repo
-                    .find_object(oid, None)
-                    .and_then(|obj| obj.peel(git2::ObjectType::Commit))
-                    .map(|obj| obj.id())
-                    .unwrap_or(oid);
-                tag_map
-                    .entry(target_oid)
-                    .or_default()
-                    .push(tag_name.to_string());
-            }
-        }
-        true
-    })?;
 
     let mut commits = Vec::new();
     for (i, oid) in revwalk.enumerate() {
@@ -450,7 +480,9 @@ pub(crate) fn diff_trees_to_commit_files(
     old_tree: Option<&git2::Tree>,
     new_tree: &git2::Tree,
 ) -> Result<Vec<CommitFile>, git2::Error> {
-    let diff = repo.diff_tree_to_tree(old_tree, Some(new_tree), None)?;
+    let mut diff = repo.diff_tree_to_tree(old_tree, Some(new_tree), None)?;
+    // Like `git show`: pair up deletions and additions into renames.
+    diff.find_similar(None)?;
 
     let mut files = Vec::new();
 
@@ -510,9 +542,7 @@ pub(crate) fn diff_trees_to_commit_files(
                 for line_idx in 0..patch.num_lines_in_hunk(hunk_idx)? {
                     let line = patch.line_in_hunk(hunk_idx, line_idx)?;
                     let origin = line.origin();
-                    let content = std::str::from_utf8(line.content())
-                        .unwrap_or("")
-                        .to_string();
+                    let content = String::from_utf8_lossy(line.content()).into_owned();
 
                     let old_lineno = line.old_lineno();
                     let new_lineno = line.new_lineno();
@@ -580,6 +610,7 @@ fn build_tree_nodes(
                     is_dir: true,
                     oid: oid.to_string(),
                     children: Some(children),
+                    is_submodule: false,
                 });
             }
             Some(git2::ObjectType::Blob) => {
@@ -589,11 +620,21 @@ fn build_tree_nodes(
                     is_dir: false,
                     oid: oid.to_string(),
                     children: None,
+                    is_submodule: false,
                 });
             }
-            _ => {
-                // Skip submodules (commit entries) and other object kinds for now
+            Some(git2::ObjectType::Commit) => {
+                // A submodule: the tree stores the commit it is pinned to.
+                nodes.push(TreeNode {
+                    name,
+                    path,
+                    is_dir: false,
+                    oid: oid.to_string(),
+                    children: None,
+                    is_submodule: true,
+                });
             }
+            _ => {}
         }
     }
 

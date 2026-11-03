@@ -110,87 +110,116 @@ export function CommitHistory({
     return () => window.removeEventListener("click", handleClick);
   }, []);
 
-  const loadAllCommits = useCallback(async () => {
-    try {
-      setLoading(true);
-      // Load all commits, local commits, and current branch commits
-      const [allList, localList, currentList] = await Promise.all([
-        invoke<GitCommit[]>("get_commits", {
-          path: repoPath,
-          limit: 10000,
-          localOnly: false,
-          branchName: undefined,
-        }),
-        invoke<GitCommit[]>("get_commits", {
-          path: repoPath,
-          limit: 10000,
-          localOnly: true,
-          branchName: undefined,
-        }),
-        currentBranch
-          ? invoke<GitCommit[]>("get_commits", {
-              path: repoPath,
-              limit: 10000,
-              localOnly: false,
-              branchName: currentBranch,
-            })
-          : Promise.resolve([]),
-      ]);
+  // Only the newest load may apply its result, so a slow earlier load can't
+  // overwrite fresher data.
+  const loadRequestRef = useRef(0);
 
-      // Store all variants
-      setCommits({
-        All: allList,
-        Local: localList,
-        Current: currentList,
-      });
-
-      // Get branch HEAD commit and select it
-      if (allList.length > 0 && currentBranch) {
-        try {
-          const branchHeadSha = await invoke<string>("get_branch_head", {
+  // `selectHead`: jump to the branch head (repo/branch changed). Otherwise this
+  // is a refresh after a repo change: update the list in place and keep the
+  // user's selection and scroll position.
+  const loadAllCommits = useCallback(
+    async (selectHead: boolean) => {
+      const requestId = ++loadRequestRef.current;
+      try {
+        setLoading(true);
+        // Load all commits, local commits, and current branch commits
+        const [allList, localList, currentList] = await Promise.all([
+          invoke<GitCommit[]>("get_commits", {
             path: repoPath,
-            branchName: currentBranch,
-          });
-          const headCommit = allList.find((c) => c.id === branchHeadSha);
-          const commitToSelect = headCommit || allList[0];
-          setSelectedCommit(commitToSelect);
-          onCommitSelect(commitToSelect);
+            limit: 10000,
+            localOnly: false,
+            branchName: undefined,
+          }),
+          invoke<GitCommit[]>("get_commits", {
+            path: repoPath,
+            limit: 10000,
+            localOnly: true,
+            branchName: undefined,
+          }),
+          currentBranch
+            ? invoke<GitCommit[]>("get_commits", {
+                path: repoPath,
+                limit: 10000,
+                localOnly: false,
+                branchName: currentBranch,
+              })
+            : Promise.resolve([]),
+        ]);
 
-          // Scroll to selected commit
-          setTimeout(() => {
-            const element = document.querySelector(
-              `[data-commit-id="${commitToSelect.id}"]`
-            );
-            if (element) {
-              element.scrollIntoView({ behavior: "smooth", block: "center" });
-            }
-          }, 100);
-        } catch {
-          // Fallback to first commit if branch head lookup fails
-          setSelectedCommit(allList[0]);
-          onCommitSelect(allList[0]);
+        if (requestId !== loadRequestRef.current) return;
+
+        // Store all variants
+        setCommits({
+          All: allList,
+          Local: localList,
+          Current: currentList,
+        });
+
+        const selected = selectedCommitRef.current;
+        if (
+          !selectHead &&
+          selected &&
+          allList.some((c) => c.id === selected.id)
+        ) {
+          return;
         }
-      }
-    } catch (error) {
-      console.error("Failed to load commits:", error);
-    } finally {
-      setLoading(false);
-    }
-  }, [repoPath, currentBranch, onCommitSelect]);
 
+        // Get branch HEAD commit and select it
+        if (allList.length > 0 && currentBranch) {
+          try {
+            const branchHeadSha = await invoke<string>("get_branch_head", {
+              path: repoPath,
+              branchName: currentBranch,
+            });
+            if (requestId !== loadRequestRef.current) return;
+            const headCommit = allList.find((c) => c.id === branchHeadSha);
+            const commitToSelect = headCommit || allList[0];
+            setSelectedCommit(commitToSelect);
+            onCommitSelect(commitToSelect);
+
+            // Scroll to selected commit
+            setTimeout(() => {
+              const element = document.querySelector(
+                `[data-commit-id="${commitToSelect.id}"]`
+              );
+              if (element) {
+                element.scrollIntoView({ behavior: "smooth", block: "center" });
+              }
+            }, 100);
+          } catch {
+            // Fallback to first commit if branch head lookup fails
+            setSelectedCommit(allList[0]);
+            onCommitSelect(allList[0]);
+          }
+        }
+      } catch (error) {
+        console.error("Failed to load commits:", error);
+      } finally {
+        if (requestId === loadRequestRef.current) setLoading(false);
+      }
+    },
+    [repoPath, currentBranch, onCommitSelect]
+  );
+  const loadAllCommitsRef = useRef(loadAllCommits);
   useEffect(() => {
-    loadAllCommits();
+    loadAllCommitsRef.current = loadAllCommits;
   }, [loadAllCommits]);
 
   useEffect(() => {
+    loadAllCommits(true);
+  }, [loadAllCommits]);
+
+  // Subscribe once: re-subscribing whenever the branch changes would leave a
+  // gap where repo-changed events are missed.
+  useEffect(() => {
     const unlisten = getCurrentWebviewWindow().listen("repo-changed", () => {
-      loadAllCommits();
+      loadAllCommitsRef.current(false);
     });
 
     return () => {
       unlisten.then((fn) => fn()).catch(() => {});
     };
-  }, [loadAllCommits]);
+  }, []);
 
   useEffect(() => {
     // Scroll to selected commit when filter changes
@@ -488,7 +517,7 @@ export function CommitHistory({
             </tr>
           </thead>
           <tbody>
-            {loading ? (
+            {loading && commits.All.length === 0 ? (
               <tr>
                 <td colSpan={5} className="loading">
                   Loading commits...

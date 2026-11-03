@@ -12,7 +12,7 @@ pub fn get_submodules(repo: &Repository) -> Result<Vec<GitSubmodule>, git2::Erro
     let mut submodules = Vec::new();
 
     for submodule in repo.submodules()? {
-        if let (Some(name), Some(url)) = (submodule.name(), submodule.url()) {
+        if let (Ok(name), Ok(Some(url))) = (submodule.name(), submodule.url()) {
             let path = submodule.path();
             submodules.push(GitSubmodule {
                 name: name.to_string(),

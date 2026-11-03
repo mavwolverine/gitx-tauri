@@ -168,7 +168,7 @@ pub fn get_commits(
     let head_name = repo
         .head()
         .ok()
-        .and_then(|h| h.shorthand().map(|s| s.to_string()));
+        .and_then(|h| h.shorthand().ok().map(|s| s.to_string()));
 
     for branch in repo.branches(None)? {
         let (branch, branch_type) = branch?;
